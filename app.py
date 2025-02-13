@@ -18,6 +18,7 @@ uploaded_image = st.file_uploader("Upload an image", type=["jpg", "png"])
 if uploaded_image is not None:
     # Preprocess the image
     image_tensor = preprocess_image(uploaded_image)
+    print(f"Image tensor shape: {image_tensor.shape}")  # Debug: Check tensor shape
     display_image(postprocess_image(image_tensor), "Uploaded Image")
 
     # Mark region of interest
