@@ -53,6 +53,7 @@ streamlit run app.py
 pip install pytest
 pytest tests/
 
+
 ```
 # Get updates
 git pull
