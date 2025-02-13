@@ -52,5 +52,7 @@ python autoencoder/train.py
 streamlit run app.py
 
 ```
+# Get updates
+git pull
 
 
