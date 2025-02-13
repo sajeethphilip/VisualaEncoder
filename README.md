@@ -36,3 +36,21 @@ autoencoder-tool/
     └── ISSUE_TEMPLATE/   # Issue templates
 
 ```
+# setting up
+```
+git clone https://github.com/your-username/autoencoder-tool.git
+cd autoencoder-tool
+git add .
+git commit -m "Initial commit: Added autoencoder, interface, and Streamlit app"
+git push origin main
+pip install -e .
+```
+# Test
+```
+pip install -r requirements.txt
+python autoencoder/train.py
+streamlit run app.py
+
+```
+
+
