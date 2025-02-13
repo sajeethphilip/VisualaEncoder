@@ -50,6 +50,8 @@ pip install -e .
 pip install -r requirements.txt
 python autoencoder/train.py
 streamlit run app.py
+pip install pytest
+pytest tests/
 
 ```
 # Get updates
