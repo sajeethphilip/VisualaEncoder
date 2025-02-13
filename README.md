@@ -54,5 +54,8 @@ streamlit run app.py
 ```
 # Get updates
 git pull
-
-
+# For developers
+```
+heroku create
+git push heroku main
+```
