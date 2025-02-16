@@ -1,7 +1,27 @@
 from torchvision import transforms
 import csv
 import torch
+import os
+import csv
+import torch
 
+def save_latent_as_csv(latent_vector, dataset_name, filename="latent.csv"):
+    """Save the latent vector as a flattened 1D CSV file."""
+    # Create data directory
+    data_dir = f"data/{dataset_name}"
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # Flatten and convert to numpy array
+    latent_vector = latent_vector.flatten().detach().numpy()
+    
+    # Save as CSV
+    csv_path = os.path.join(data_dir, filename)
+    with open(csv_path, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(latent_vector)
+    
+    print(f"Latent space saved to {csv_path}")
+    
 def postprocess_image(image_tensor):
     """Convert a tensor back to a PIL image."""
     print(f"Input tensor shape: {image_tensor.shape}")  # Debug: Check input tensor shape
