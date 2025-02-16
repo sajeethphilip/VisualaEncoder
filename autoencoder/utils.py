@@ -1,4 +1,6 @@
 from torchvision import transforms
+import csv
+import torch
 
 def postprocess_image(image_tensor):
     """Convert a tensor back to a PIL image."""
@@ -21,3 +23,11 @@ def postprocess_image(image_tensor):
     image_tensor = image_tensor.squeeze(0).permute(1, 2, 0)  # Remove batch dimension and rearrange
     image = transforms.ToPILImage()(image_tensor)
     return image
+
+def load_latent_from_csv(filename="latent.csv"):
+    """Load the latent vector from a CSV file."""
+    with open(filename, "r") as csvfile:
+        reader = csv.reader(csvfile)
+        latent_vector = next(reader)  # Read the first row
+    latent_vector = torch.tensor([float(x) for x in latent_vector], dtype=torch.float32)
+    return latent_vector
