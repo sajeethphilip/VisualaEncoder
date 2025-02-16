@@ -4,6 +4,20 @@ import torch
 import os
 import csv
 import torch
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+
+def visualize_embeddings(embeddings, labels, title="Embedding Space"):
+    """Visualize the embedding space using t-SNE."""
+    tsne = TSNE(n_components=2, random_state=42)
+    embeddings_2d = tsne.fit_transform(embeddings)
+    
+    plt.figure(figsize=(10, 8))
+    scatter = plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], c=labels, cmap="tab10")
+    plt.colorbar(scatter)
+    plt.title(title)
+    plt.show()
+
 
 def get_device():
     """Detect and return the best available device (CPU, GPU, or TPU)."""
