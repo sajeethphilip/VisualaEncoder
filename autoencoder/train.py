@@ -1,9 +1,9 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from autoencoder.model import Autoencoder
+from tqdm import tqdm  # Import tqdm
 
 # Hyperparameters
 latent_dim = 128
@@ -21,15 +21,20 @@ model = Autoencoder(latent_dim)
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-# Training loop
+# Training loop with tqdm
 for epoch in range(epochs):
-    for batch in train_loader:
+    progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}", leave=False)
+    for batch in progress_bar:
         images, _ = batch
         optimizer.zero_grad()
         reconstructed, _ = model(images)
         loss = criterion(reconstructed, images)
         loss.backward()
         optimizer.step()
+        
+        # Update progress bar description with current loss
+        progress_bar.set_postfix(loss=loss.item())
+    
     print(f"Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}")
 
 # Save the trained model
