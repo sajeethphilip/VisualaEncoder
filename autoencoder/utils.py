@@ -5,6 +5,17 @@ import os
 import csv
 import torch
 
+def get_device():
+    """Detect and return the best available device (CPU, GPU, or TPU)."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():  # For Apple Silicon GPUs
+        return torch.device("mps")
+    elif torch.xpu.is_available():  # For Intel GPUs
+        return torch.device("xpu")
+    else:
+        return torch.device("cpu")
+        
 def save_latent_as_csv(latent_vector, dataset_name, filename="latent.csv"):
     """Save the latent vector as a flattened 1D CSV file."""
     # Create data directory
