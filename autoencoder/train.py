@@ -76,27 +76,40 @@ os.makedirs("Model/checkpoint", exist_ok=True)
 best_loss = float("inf")
 epochs_without_improvement = 0  # Counter for early stopping
 
-# Training loop with tqdm
+# Initialize model, loss, and optimizer
+model = Autoencoder(latent_dim=128, embedding_dim=64).to(device)
+criterion_recon = nn.MSELoss()  # Reconstruction loss
+criterion_embed = EmbeddingLoss(margin=1.0)  # Embedding loss
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+# Training loop
 for epoch in range(epochs):
-    model.train()  # Set model to training mode
+    model.train()
     progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}", leave=False)
     epoch_loss = 0.0
     
     for batch in progress_bar:
-        images, _ = batch
-        images = images.to(device)  # Move data to the same device as the model
+        images, labels = batch
+        images = images.to(device)
+        labels = labels.to(device)
+        
         optimizer.zero_grad()
-        reconstructed, _ = model(images)
-        loss = criterion(reconstructed, images)
+        reconstructed, embeddings = model(images)
+        
+        # Compute losses
+        loss_recon = criterion_recon(reconstructed, images)
+        loss_embed = criterion_embed(embeddings, labels)
+        loss = loss_recon + loss_embed  # Combine losses
+        
         loss.backward()
         optimizer.step()
         
         epoch_loss += loss.item()
         progress_bar.set_postfix(loss=loss.item())
     
-    # Calculate average training loss
+    # Calculate average epoch loss
     epoch_loss /= len(train_loader)
-    print(f"Epoch [{epoch+1}/{epochs}], Training Loss: {epoch_loss:.4f}")
+    print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}")
     
     # Validation phase
     model.eval()  # Set model to evaluation mode
