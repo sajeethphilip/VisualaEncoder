@@ -8,7 +8,9 @@ from interface.visualization import display_image
 
 # Load the trained autoencoder
 model = Autoencoder()
-model.load_state_dict(torch.load("autoencoder.pth", map_location=torch.device("cpu")))
+dataset_name = "CIFAR10"  # Replace with the dataset name used during training
+checkpoint_path = f"Model/checkpoint/Best_{dataset_name}.pth"
+model.load_state_dict(torch.load(checkpoint_path, map_location=torch.device("cpu")))
 model.eval()
 
 # Streamlit app
@@ -31,8 +33,8 @@ if uploaded_image is not None:
 
     # Save latent vector as CSV
     if st.button("Save Latent Space as CSV"):
-        save_latent_as_csv(latent_vector, "latent.csv")
-        st.success("Latent space saved as latent.csv")
+        save_latent_as_csv(latent_vector, dataset_name, "latent.csv")
+        st.success(f"Latent space saved to data/{dataset_name}/latent.csv")
 
     # Mark region of interest
     st.write("Mark the region of interest:")
@@ -70,3 +72,4 @@ if uploaded_csv is not None:
         reconstructed_image = model.decoder(latent_vector)
     reconstructed_pil_image = postprocess_image(reconstructed_image)
     display_image(reconstructed_pil_image, "Reconstructed Image from CSV")
+    
