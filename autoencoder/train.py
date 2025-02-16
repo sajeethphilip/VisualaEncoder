@@ -8,6 +8,31 @@ from autoencoder.model import Autoencoder
 from autoencoder.data_loader import load_torchvision_dataset, download_and_extract, load_local_dataset
 from autoencoder.utils import get_device
 
+import torch
+import torch.nn as nn
+
+class EmbeddingLoss(nn.Module):
+    def __init__(self, margin=1.0):
+        super(EmbeddingLoss, self).__init__()
+        self.margin = margin
+    
+    def forward(self, embeddings, labels):
+        """
+        embeddings: Tensor of shape (batch_size, embedding_dim)
+        labels: Tensor of shape (batch_size,) containing class labels
+        """
+        batch_size = embeddings.size(0)
+        loss = 0.0
+        
+        for i in range(batch_size):
+            for j in range(i + 1, batch_size):
+                if labels[i] == labels[j]:  # Same class
+                    loss += F.mse_loss(embeddings[i], embeddings[j])  # Pull closer
+                else:  # Different classes
+                    loss += max(0, self.margin - F.mse_loss(embeddings[i], embeddings[j]))  # Push apart
+        
+        return loss / (batch_size * (batch_size - 1))  # Normalize by number of pairs
+
 # Hyperparameters
 latent_dim = 128
 batch_size = 64
