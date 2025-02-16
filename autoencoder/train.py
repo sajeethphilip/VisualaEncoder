@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from autoencoder.model import Autoencoder
 from autoencoder.data_loader import load_torchvision_dataset, download_and_extract, load_local_dataset
+from autoencoder.utils import get_device
 
 # Hyperparameters
 latent_dim = 128
@@ -14,6 +15,10 @@ epochs = 20
 learning_rate = 1e-3
 dataset_name = "CIFAR10"  # Can be "CIFAR10", "MNIST", or a path to a local dataset
 data_source = "torchvision"  # Can be "torchvision", "url", or "local"
+
+# Detect device
+device = get_device()
+print(f"Using device: {device}")
 
 # Load dataset
 if data_source == "torchvision":
@@ -30,7 +35,7 @@ else:
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
 # Initialize model, loss, and optimizer
-model = Autoencoder(latent_dim)
+model = Autoencoder(latent_dim).to(device)  # Move model to the detected device
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -45,6 +50,7 @@ for epoch in range(epochs):
     
     for batch in progress_bar:
         images, _ = batch
+        images = images.to(device)  # Move data to the same device as the model
         optimizer.zero_grad()
         reconstructed, _ = model(images)
         loss = criterion(reconstructed, images)
@@ -62,5 +68,11 @@ for epoch in range(epochs):
     if epoch_loss < best_loss:
         best_loss = epoch_loss
         checkpoint_path = f"Model/checkpoint/Best_{dataset_name}.pth"
-        torch.save(model.state_dict(), checkpoint_path)
+        torch.save({
+            "epoch": epoch + 1,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "loss": best_loss,
+            "device": str(device)  # Save device metadata
+        }, checkpoint_path)
         print(f"Saved best model to {checkpoint_path}")
