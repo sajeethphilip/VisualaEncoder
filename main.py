@@ -220,6 +220,12 @@ def validate_config(config):
         if key not in config:
             raise ValueError(f"Missing required key in config: {key}")
 
+    # Validate model-specific keys
+    model_keys = ["encoder_type", "feature_dims", "learning_rate", "optimizer", "scheduler", "autoencoder_config"]
+    for key in model_keys:
+        if key not in config["model"]:
+            raise ValueError(f"Missing required key in config['model']: {key}")
+
     # Validate training-specific keys
     training_keys = ["batch_size", "epochs", "num_workers", "checkpoint_dir", "validation_split", "early_stopping"]
     for key in training_keys:
@@ -343,6 +349,10 @@ def main():
     # Ensure config is loaded
     if config is None:
         raise ValueError("Configuration not loaded. Please check the dataset path and JSON file.")
+
+    # Debug: Print the config to verify its contents
+    print("\nConfiguration loaded:")
+    print(json.dumps(config, indent=4))
 
     # Validate the configuration
     validate_config(config)
