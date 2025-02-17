@@ -13,11 +13,22 @@ def load_dataset_config(dataset_name):
     return config["dataset"]
 
 
+from torchvision import transforms
+
 def load_local_dataset(dataset_name, transform=None):
     """Load a dataset from a local directory."""
-    if transform is None:
-        transform = transforms.Compose([transforms.ToTensor()])
+    # Load config first
+    config = load_dataset_config(dataset_name)
 
-    data_dir=f"data/{dataset_name}/train/"
+    if transform is None:
+        # Use dataset-specific normalization from config
+        transform = transforms.Compose([
+            transforms.Grayscale(num_output_channels=config['in_channels']),  # Ensure correct number of channels
+            transforms.ToTensor(),
+            transforms.Normalize(mean=config['mean'], std=config['std'])
+        ])
+
+    data_dir = f"data/{dataset_name}/train/"
     dataset = datasets.ImageFolder(root=data_dir, transform=transform)
     return dataset
+
