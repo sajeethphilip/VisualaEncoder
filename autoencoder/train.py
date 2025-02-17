@@ -9,7 +9,82 @@ from autoencoder.model import Autoencoder
 from autoencoder.data_loader import load_local_dataset, load_dataset_config
 from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv
 
-def train_model(dataset_name):
+def train_model(config):
+    """Train the autoencoder model using the provided configuration."""
+    # Load dataset
+    dataset_config = config["dataset"]
+    train_dataset = load_local_dataset(dataset_config["name"])
+    train_loader = DataLoader(train_dataset, batch_size=config["training"]["batch_size"], shuffle=True)
+
+    # Initialize model
+    model = Autoencoder(config).to(device)
+
+    # Define optimizer
+    optimizer_config = config["model"]["optimizer"]
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config["model"]["learning_rate"],
+        weight_decay=optimizer_config["weight_decay"],
+        betas=(optimizer_config["beta1"], optimizer_config["beta2"]),
+        eps=optimizer_config["epsilon"]
+    )
+
+    # Define scheduler
+    scheduler_config = config["model"]["scheduler"]
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        factor=scheduler_config["factor"],
+        patience=scheduler_config["patience"],
+        min_lr=scheduler_config["min_lr"],
+        verbose=scheduler_config["verbose"]
+    )
+
+    # Define loss functions
+    reconstruction_weight = config["model"]["autoencoder_config"]["reconstruction_weight"]
+    feature_weight = config["model"]["autoencoder_config"]["feature_weight"]
+    criterion_recon = nn.MSELoss()
+    criterion_feature = nn.MSELoss()
+
+    # Training loop
+    for epoch in range(config["training"]["epochs"]):
+        model.train()
+        for batch in train_loader:
+            images, _ = batch
+            images = images.to(device)
+
+            # Forward pass
+            reconstructed, latent, embedding = model(images)
+
+            # Compute losses
+            loss_recon = criterion_recon(reconstructed, images) * reconstruction_weight
+            loss_feature = criterion_feature(embedding, torch.zeros_like(embedding)) * feature_weight
+            loss = loss_recon + loss_feature
+
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        # Update scheduler
+        scheduler.step(loss)
+
+        # Log metrics
+        print(f"Epoch [{epoch+1}/{config['training']['epochs']}], Loss: {loss.item():.4f}")
+
+    # Save model checkpoint
+    checkpoint_dir = config["training"]["checkpoint_dir"]
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    checkpoint_path = os.path.join(checkpoint_dir, "best_model.pth")
+    torch.save({
+        "epoch": epoch + 1,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "loss": loss.item(),
+        "config": config
+    }, checkpoint_path)
+    print(f"Saved best model to {checkpoint_path}")
+
+def train_model1(dataset_name):
     """Train the autoencoder model."""
     # Load dataset and config
     config = load_dataset_config(dataset_name)

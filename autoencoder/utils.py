@@ -177,7 +177,40 @@ def setup_dataset(dataset_name):
         logging.error(f"Error setting up dataset: {str(e)}")
         return None, None, None
 
+def get_augmentation_transform(config):
+    """Create a data augmentation transform based on the configuration."""
+    augmentation_config = config["augmentation"]
+    transform_list = []
 
+    if augmentation_config["enabled"]:
+        if augmentation_config["random_crop"]["enabled"]:
+            transform_list.append(transforms.RandomCrop(
+                size=config["dataset"]["input_size"],
+                padding=augmentation_config["random_crop"]["padding"]
+            ))
+        if augmentation_config["random_rotation"]["enabled"]:
+            transform_list.append(transforms.RandomRotation(
+                degrees=augmentation_config["random_rotation"]["degrees"]
+            ))
+        if augmentation_config["horizontal_flip"]["enabled"]:
+            transform_list.append(transforms.RandomHorizontalFlip(
+                p=augmentation_config["horizontal_flip"]["probability"]
+            ))
+        if augmentation_config["color_jitter"]["enabled"]:
+            transform_list.append(transforms.ColorJitter(
+                brightness=augmentation_config["color_jitter"]["brightness"],
+                contrast=augmentation_config["color_jitter"]["contrast"],
+                saturation=augmentation_config["color_jitter"]["saturation"],
+                hue=augmentation_config["color_jitter"]["hue"]
+            ))
+
+    # Normalization
+    transform_list.append(transforms.Normalize(
+        mean=config["dataset"]["mean"],
+        std=config["dataset"]["std"]
+    ))
+
+    return transforms.Compose(transform_list)
 
 def download_and_extract(url, extract_to="./data"):
     """
