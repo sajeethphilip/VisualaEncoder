@@ -1,24 +1,44 @@
 import os
+import json
 import torch
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from PIL import Image
-import requests
-import zipfile
-import tarfile
 
-def load_torchvision_dataset(dataset_name, root="./data", train=True):
-    """Load a dataset from torchvision.datasets."""
-    transform = transforms.Compose([transforms.ToTensor()])
+def load_dataset_config(dataset_name):
+    """Load dataset configuration from JSON file."""
+    config_path = f"data/{dataset_name}/{dataset_name}.json"
+    with open(config_path, "r") as f:
+        config = json.load(f)
+    return config["dataset"]
+
+def load_dataset(dataset_name, train=True):
+    """Load a dataset based on the configuration."""
+    config = load_dataset_config(dataset_name)
     
-    if dataset_name == "CIFAR10":
-        dataset = datasets.CIFAR10(root=root, train=train, download=True, transform=transform)
-    elif dataset_name == "MNIST":
-        dataset = datasets.MNIST(root=root, train=train, download=True, transform=transform)
+    # Define transformations
+    transform = transforms.Compose([
+        transforms.Resize(config["input_size"]),
+        transforms.ToTensor(),
+        transforms.Normalize(config["mean"], config["std"])
+    ])
+    
+    if config["type"] == "torchvision":
+        # Load torchvision dataset
+        if dataset_name == "mnist":
+            dataset = datasets.MNIST(root="data", train=train, download=True, transform=transform)
+        elif dataset_name == "cifar10":
+            dataset = datasets.CIFAR10(root="data", train=train, download=True, transform=transform)
+        elif dataset_name == "cifar100":
+            dataset = datasets.CIFAR100(root="data", train=train, download=True, transform=transform)
+        else:
+            raise ValueError(f"Unsupported torchvision dataset: {dataset_name}")
     else:
-        raise ValueError(f"Unsupported dataset: {dataset_name}")
+        # Load custom dataset from local directory
+        data_dir = config["train_dir"] if train else config["test_dir"]
+        dataset = datasets.ImageFolder(root=data_dir, transform=transform)
     
-    return dataset
+    return dataset, config
 
 def download_and_extract(url, extract_to="./data"):
     """Download and extract a dataset from a URL."""
