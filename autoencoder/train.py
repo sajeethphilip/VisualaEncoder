@@ -7,6 +7,7 @@ from tqdm import tqdm
 from autoencoder.model import Autoencoder
 from autoencoder.data_loader import load_torchvision_dataset, download_and_extract, load_local_dataset
 from autoencoder.utils import get_device
+import torch.nn.functional as F
 
 import torch
 import torch.nn as nn
