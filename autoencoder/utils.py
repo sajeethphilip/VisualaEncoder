@@ -7,9 +7,36 @@ import torch
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 import os
-import csv
-import torch
+import pickle
 
+
+def save_latent_space(latent, dataset_name, filename="latent.pkl"):
+    """Save the latent space as a pickle file."""
+    data_dir = f"data/{dataset_name}"
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # Save as pickle
+    pkl_path = os.path.join(data_dir, filename)
+    with open(pkl_path, "wb") as f:
+        pickle.dump(latent.cpu().numpy(), f)
+    
+    print(f"Latent space saved to {pkl_path}")
+
+def save_embeddings_as_csv(embeddings, dataset_name, filename="embeddings.csv"):
+    """Save the embedded tensors as a flattened 1D CSV file."""
+    data_dir = f"data/{dataset_name}"
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # Flatten and convert to numpy array
+    embeddings = embeddings.flatten().detach().cpu().numpy()
+    
+    # Save as CSV
+    csv_path = os.path.join(data_dir, filename)
+    with open(csv_path, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(embeddings)
+    
+    print(f"Embeddings saved to {csv_path}")
 def save_embeddings_as_csv(embeddings, dataset_name, filename="embeddings.csv"):
     """Save the embedded tensors as a flattened 1D CSV file."""
     # Create data directory
