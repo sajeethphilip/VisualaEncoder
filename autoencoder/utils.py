@@ -29,7 +29,7 @@ from tqdm import tqdm
 import json
 from pathlib import Path
 
-def process_dataset(source, dataset_name, extract_to="./data"):
+def download_and_extract(source, dataset_name, extract_to="./data"):
     """
     Generic dataset processor that handles various input formats and creates a standardized output.
     
