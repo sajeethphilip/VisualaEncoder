@@ -17,268 +17,219 @@ import numpy as np
 from PIL import Image
 import json
 from pathlib import Path
+import pandas as pd
 
-import os
-import requests
-import zipfile
-import tarfile
-import gzip
-import numpy as np
-from PIL import Image
-from tqdm import tqdm
-import json
-from pathlib import Path
 
-def download_and_extract(source, dataset_name, extract_to="./data"):
+def download_and_extract(url, extract_to="./data"):
     """
-    Generic dataset processor that handles various input formats and creates a standardized output.
+    Download a file from a URL and extract it to the specified directory.
     
     Args:
-        source (str): URL or local path to the dataset
-        dataset_name (str): Name of the dataset (will be used as directory name)
-        extract_to (str): Base directory for processed datasets
+        url (str): The URL of the file to download.
+        extract_to (str): The directory to extract the file to.
     
     Returns:
-        str: Path to the processed dataset directory
+        str: The path to the extracted directory.
     """
-    # Setup directory structure
-    dataset_dir = os.path.join(extract_to, dataset_name)
-    raw_dir = os.path.join(dataset_dir, "raw")
-    train_dir = os.path.join(dataset_dir, "train")
-    test_dir = os.path.join(dataset_dir, "test")
+    # Create the extraction directory
+    os.makedirs(extract_to, exist_ok=True)
     
-    for d in [raw_dir, train_dir, test_dir]:
-        os.makedirs(d, exist_ok=True)
+    # Get the filename from the URL
+    filename = os.path.join(extract_to, url.split("/")[-1])
     
-    # Download if source is URL
-    if source.startswith(('http://', 'https://')):
-        files = download_dataset(source, raw_dir)
-    else:
-        files = [source] if os.path.isfile(source) else get_files_from_directory(source)
-    
-    # Process the raw files
-    for file in files:
-        process_file(file, raw_dir, train_dir, test_dir)
-    
-    # Generate dataset info
-    generate_dataset_info(dataset_dir)
-    
-    return dataset_dir
-
-def download_dataset(url, raw_dir):
-    """Download dataset from URL."""
-    filename = os.path.join(raw_dir, url.split('/')[-1])
-    
+    # Download the file with a progress bar
     print(f"Downloading {url}...")
     try:
         response = requests.get(url, stream=True)
-        response.raise_for_status()
+        response.raise_for_status()  # Raise an error for bad status codes
         
-        total_size = int(response.headers.get('content-length', 0))
-        with open(filename, 'wb') as f, tqdm(
+        # Get the total file size
+        total_size = int(response.headers.get("content-length", 0))
+        
+        # Download the file in chunks
+        with open(filename, "wb") as f, tqdm(
             desc=filename,
             total=total_size,
-            unit='B',
+            unit="B",
             unit_scale=True,
             unit_divisor=1024,
-        ) as pbar:
-            for chunk in response.iter_content(chunk_size=8192):
+        ) as progress_bar:
+            for chunk in response.iter_content(chunk_size=1024):
                 if chunk:
                     f.write(chunk)
-                    pbar.update(len(chunk))
+                    progress_bar.update(len(chunk))
         
-        # Handle compressed files
-        return extract_if_compressed(filename, raw_dir)
-    except Exception as e:
-        print(f"Download failed: {e}")
-        return []
-
-def extract_if_compressed(file_path, extract_to):
-    """Extract compressed files and return list of extracted files."""
+        print(f"Download complete: {filename}")
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to download {url}: {e}")
+        return None
+    
+    # Extract the file
+    print(f"Extracting {filename}...")
     try:
-        if file_path.endswith('.gz') and not file_path.endswith(('.tar.gz', '.tgz')):
-            with gzip.open(file_path, 'rb') as f_in:
-                extracted_path = file_path[:-3]
-                with open(extracted_path, 'wb') as f_out:
-                    f_out.write(f_in.read())
-            os.remove(file_path)
-            return [extracted_path]
-            
-        elif file_path.endswith(('.tar.gz', '.tgz')):
-            with tarfile.open(file_path, 'r:gz') as tar:
-                tar.extractall(extract_to)
-            os.remove(file_path)
-            return get_files_from_directory(extract_to)
-            
-        elif file_path.endswith('.zip'):
-            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+        if filename.endswith(".zip"):
+            with zipfile.ZipFile(filename, "r") as zip_ref:
                 zip_ref.extractall(extract_to)
-            os.remove(file_path)
-            return get_files_from_directory(extract_to)
-            
-        return [file_path]
-    except Exception as e:
-        print(f"Extraction failed: {e}")
-        return []
-
-def get_files_from_directory(directory):
-    """Get all files from directory recursively."""
-    files = []
-    for root, _, filenames in os.walk(directory):
-        for filename in filenames:
-            files.append(os.path.join(root, filename))
-    return files
-
-def process_file(file_path, raw_dir, train_dir, test_dir):
-    """Process a single file based on its type."""
-    if is_idx_file(file_path):
-        process_idx_file(file_path, train_dir, test_dir)
-    elif is_image_file(file_path):
-        process_image_file(file_path, train_dir, test_dir)
-    elif is_binary_file(file_path):
-        process_binary_file(file_path, train_dir, test_dir)
-
-def is_idx_file(file_path):
-    """Check if file is in IDX format."""
-    try:
-        with open(file_path, 'rb') as f:
-            magic = int.from_bytes(f.read(4), byteorder='big')
-            return magic & 0xFFF0000 == 0x0000000
-    except:
-        return False
-
-def is_image_file(file_path):
-    """Check if file is an image."""
-    return file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif'))
-
-def is_binary_file(file_path):
-    """Check if file is a binary data file."""
-    # Implement based on your specific binary format requirements
-    return False
-
-def process_idx_file(file_path, train_dir, test_dir):
-    """Process IDX format file."""
-    if 'train' in os.path.basename(file_path).lower():
-        if 'image' in os.path.basename(file_path).lower():
-            images = read_idx3_ubyte(file_path)
-            labels = read_idx1_ubyte(file_path.replace('images', 'labels'))
-            save_images_and_labels(images, labels, train_dir)
-        elif 'label' not in os.path.basename(file_path).lower():
-            # If not clearly marked, assume training data
-            images = read_idx3_ubyte(file_path)
-            labels = np.zeros(len(images))  # Default labels if not provided
-            save_images_and_labels(images, labels, train_dir)
-    elif 'test' in os.path.basename(file_path).lower() or 't10k' in os.path.basename(file_path).lower():
-        if 'image' in os.path.basename(file_path).lower():
-            images = read_idx3_ubyte(file_path)
-            labels = read_idx1_ubyte(file_path.replace('images', 'labels'))
-            save_images_and_labels(images, labels, test_dir)
-
-def process_image_file(file_path, train_dir, test_dir):
-    """Process image file."""
-    # Determine if file belongs to train or test set based on path
-    is_test = 'test' in file_path.lower()
-    output_dir = test_dir if is_test else train_dir
-    
-    # Try to extract class from directory structure
-    class_name = extract_class_from_path(file_path)
-    if class_name is None:
-        class_name = '0'  # Default class if none found
-    
-    # Save processed image
-    save_single_image(file_path, output_dir, class_name)
-
-def extract_class_from_path(file_path):
-    """Extract class name from file path."""
-    parts = Path(file_path).parts
-    for part in reversed(parts[:-1]):  # Exclude filename
-        if part.lower() not in ['train', 'test', 'raw', 'data']:
-            return part
-    return None
-
-def save_single_image(src_path, output_dir, class_name):
-    """Save a single image to the appropriate directory."""
-    try:
-        class_dir = os.path.join(output_dir, str(class_name))
-        os.makedirs(class_dir, exist_ok=True)
+        elif filename.endswith(".tar.gz") or filename.endswith(".tgz"):
+            with tarfile.open(filename, "r:gz") as tar_ref:
+                tar_ref.extractall(extract_to)
+        elif filename.endswith(".tar"):
+            with tarfile.open(filename, "r:") as tar_ref:
+                tar_ref.extractall(extract_to)
+        else:
+            print(f"Unsupported file format: {filename}")
+            return None
         
-        # Generate unique filename
-        dest_filename = f"{len(os.listdir(class_dir))}.png"
-        dest_path = os.path.join(class_dir, dest_filename)
-        
-        # Process and save image
-        with Image.open(src_path) as img:
-            # Convert to RGB if needed
-            if img.mode not in ['L', 'RGB']:
-                img = img.convert('RGB')
-            img.save(dest_path)
-    except Exception as e:
-        print(f"Error processing image {src_path}: {e}")
+        print(f"Extraction complete: {extract_to}")
+    except (zipfile.BadZipFile, tarfile.TarError) as e:
+        print(f"Failed to extract {filename}: {e}")
+        return None
+    
+    # Process the extracted data
+    process_data(extract_to)
+    
+    return extract_to
+
+def process_data(data_dir):
+    """
+    Process data in the specified directory.
+    
+    Args:
+        data_dir (str): The directory containing the dataset files.
+    """
+    # Detect and process the data format
+    for root, _, files in os.walk(data_dir):
+        for file in files:
+            file_path = os.path.join(root, file)
+            if file.endswith(".csv") or file.endswith(".tsv") or file.endswith(".xlsx"):
+                process_tabular_data(file_path, data_dir)
+            elif file.endswith(".idx3-ubyte") or file.endswith(".idx1-ubyte"):
+                process_mnist(data_dir)
+            elif file.endswith((".png", ".jpg", ".jpeg")):
+                process_image_data(file_path, data_dir)
+            elif file.endswith(".json"):
+                process_json_data(file_path, data_dir)
+            elif file.endswith(".h5"):
+                process_hdf5_data(file_path, data_dir)
+            elif file.endswith(".npy"):
+                process_numpy_data(file_path, data_dir)
+            else:
+                print(f"Unsupported file format: {file_path}")
+
+def process_tabular_data(file_path, data_dir):
+    """
+    Process tabular data (e.g., CSV, TSV, Excel).
+    
+    Args:
+        file_path (str): Path to the tabular data file.
+        data_dir (str): Directory to save processed data.
+    """
+    print(f"Processing tabular data: {file_path}")
+    if file_path.endswith(".csv") or file_path.endswith(".tsv"):
+        df = pd.read_csv(file_path, sep="\t" if file_path.endswith(".tsv") else ",")
+    elif file_path.endswith(".xlsx"):
+        df = pd.read_excel(file_path)
+    
+    # Save processed data
+    output_path = os.path.join(data_dir, "processed", "tabular.csv")
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    df.to_csv(output_path, index=False)
+    print(f"Tabular data saved to {output_path}")
+
+def process_image_data(file_path, data_dir):
+    """
+    Process image data (e.g., PNG, JPG).
+    
+    Args:
+        file_path (str): Path to the image file.
+        data_dir (str): Directory to save processed data.
+    """
+    print(f"Processing image data: {file_path}")
+    image = Image.open(file_path)
+    output_path = os.path.join(data_dir, "processed", "images", os.path.basename(file_path))
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    image.save(output_path)
+    print(f"Image saved to {output_path}")
+
+def process_mnist(data_dir):
+    """
+    Process MNIST dataset files (e.g., .idx3-ubyte and .idx1-ubyte).
+    
+    Args:
+        data_dir (str): The directory containing the MNIST dataset files.
+    """
+    print("Processing MNIST dataset...")
+    train_images_path = os.path.join(data_dir, "raw", "train-images-idx3-ubyte")
+    train_labels_path = os.path.join(data_dir, "raw", "train-labels-idx1-ubyte")
+    test_images_path = os.path.join(data_dir, "raw", "t10k-images-idx3-ubyte")
+    test_labels_path = os.path.join(data_dir, "raw", "t10k-labels-idx1-ubyte")
+    
+    # Create directories for processed data
+    train_dir = os.path.join(data_dir, "processed", "train")
+    test_dir = os.path.join(data_dir, "processed", "test")
+    os.makedirs(train_dir, exist_ok=True)
+    os.makedirs(test_dir, exist_ok=True)
+    
+    # Process training data
+    train_images = read_idx3_ubyte(train_images_path)
+    train_labels = read_idx1_ubyte(train_labels_path)
+    save_images_and_labels(train_images, train_labels, train_dir)
+    
+    # Process test data
+    test_images = read_idx3_ubyte(test_images_path)
+    test_labels = read_idx1_ubyte(test_labels_path)
+    save_images_and_labels(test_images, test_labels, test_dir)
+    
+    print(f"MNIST dataset processed and saved to {data_dir}")
 
 def read_idx3_ubyte(file_path):
-    """Read IDX3-UBYTE format image data."""
+    """
+    Read images from an IDX3-UBYTE file.
+    
+    Args:
+        file_path (str): Path to the IDX3-UBYTE file.
+    
+    Returns:
+        np.ndarray: Array of images.
+    """
     with open(file_path, "rb") as f:
-        magic = int.from_bytes(f.read(4), byteorder='big')
-        size = int.from_bytes(f.read(4), byteorder='big')
-        rows = int.from_bytes(f.read(4), byteorder='big')
-        cols = int.from_bytes(f.read(4), byteorder='big')
-        buf = f.read()
-        data = np.frombuffer(buf, dtype=np.uint8)
-        return data.reshape(size, rows, cols)
+        magic_number = int.from_bytes(f.read(4), byteorder="big")
+        num_images = int.from_bytes(f.read(4), byteorder="big")
+        num_rows = int.from_bytes(f.read(4), byteorder="big")
+        num_cols = int.from_bytes(f.read(4), byteorder="big")
+        images = np.frombuffer(f.read(), dtype=np.uint8).reshape(num_images, num_rows, num_cols)
+    return images
 
 def read_idx1_ubyte(file_path):
-    """Read IDX1-UBYTE format label data."""
+    """
+    Read labels from an IDX1-UBYTE file.
+    
+    Args:
+        file_path (str): Path to the IDX1-UBYTE file.
+    
+    Returns:
+        np.ndarray: Array of labels.
+    """
     with open(file_path, "rb") as f:
-        magic = int.from_bytes(f.read(4), byteorder='big')
-        size = int.from_bytes(f.read(4), byteorder='big')
-        return np.frombuffer(f.read(), dtype=np.uint8)
+        magic_number = int.from_bytes(f.read(4), byteorder="big")
+        num_labels = int.from_bytes(f.read(4), byteorder="big")
+        labels = np.frombuffer(f.read(), dtype=np.uint8)
+    return labels
 
 def save_images_and_labels(images, labels, output_dir):
-    """Save images with their corresponding labels."""
-    unique_labels = np.unique(labels)
+    """
+    Save images and labels to a directory.
     
-    # Create directories for each class
-    for label in unique_labels:
-        os.makedirs(os.path.join(output_dir, str(label)), exist_ok=True)
-    
-    # Save images
-    for idx, (image, label) in enumerate(zip(images, labels)):
-        image_path = os.path.join(output_dir, str(label), f"{idx}.png")
+    Args:
+        images (np.ndarray): Array of images.
+        labels (np.ndarray): Array of labels.
+        output_dir (str): Directory to save the images and labels.
+    """
+    for i, (image, label) in enumerate(zip(images, labels)):
+        label_dir = os.path.join(output_dir, str(label))
+        os.makedirs(label_dir, exist_ok=True)
+        image_path = os.path.join(label_dir, f"{i}.png")
         Image.fromarray(image).save(image_path)
-
-def generate_dataset_info(dataset_dir):
-    """Generate dataset info by analyzing the processed data."""
-    train_dir = os.path.join(dataset_dir, "train")
-    
-    # Find a sample image
-    sample_image = None
-    for root, _, files in os.walk(train_dir):
-        for file in files:
-            if file.endswith('.png'):
-                sample_image = Image.open(os.path.join(root, file))
-                break
-        if sample_image:
-            break
-    
-    if sample_image:
-        info = {
-            "dataset": {
-                "name": os.path.basename(dataset_dir),
-                "type": "custom",
-                "in_channels": 1 if sample_image.mode == 'L' else 3,
-                "num_classes": len([d for d in os.listdir(train_dir) if os.path.isdir(os.path.join(train_dir, d))]),
-                "input_size": list(sample_image.size),
-                "mean": [0.5] if sample_image.mode == 'L' else [0.5, 0.5, 0.5],
-                "std": [0.5] if sample_image.mode == 'L' else [0.5, 0.5, 0.5],
-                "train_dir": train_dir,
-                "test_dir": os.path.join(dataset_dir, "test"),
-                "image_type": sample_image.mode.lower()
-            }
-        }
-        
-        with open(os.path.join(dataset_dir, "dataset_info.json"), 'w') as f:
-            json.dump(info, f, indent=4)
-        
 #-------------------------------
     
 def save_latent_space(latent, dataset_name, filename="latent.pkl"):
