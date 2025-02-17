@@ -279,7 +279,7 @@ def generate_dataset_info(dataset_dir):
         with open(os.path.join(dataset_dir, "dataset_info.json"), 'w') as f:
             json.dump(info, f, indent=4)
         
-
+#-------------------------------
     
 def save_latent_space(latent, dataset_name, filename="latent.pkl"):
     """Save the latent space as a pickle file."""
