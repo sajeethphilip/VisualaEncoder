@@ -71,6 +71,81 @@ def create_default_json_config(dataset_name, data_dir, image_path):
                     "clustering_temperature": 1.0,
                     "min_cluster_confidence": 0.7
                 }
+            },
+            "loss_functions": {
+                "astronomical_structure": {
+                    "enabled": True,
+                    "weight": 1.0,
+                    "components": {
+                        "edge_preservation": True,
+                        "peak_preservation": True,
+                        "detail_preservation": True
+                    }
+                },
+                "medical_structure": {
+                    "enabled": True,
+                    "weight": 1.0,
+                    "components": {
+                        "boundary_preservation": True,
+                        "tissue_contrast": True,
+                        "local_structure": True
+                    }
+                },
+                "agricultural_pattern": {
+                    "enabled": True,
+                    "weight": 1.0,
+                    "components": {
+                        "texture_preservation": True,
+                        "damage_pattern": True,
+                        "color_consistency": True
+                    }
+                }
+            },
+            "enhancement_modules": {
+                "astronomical": {
+                    "enabled": True,
+                    "components": {
+                        "structure_preservation": True,
+                        "detail_preservation": True,
+                        "star_detection": True,
+                        "galaxy_features": True,
+                        "kl_divergence": True
+                    },
+                    "weights": {
+                        "detail_weight": 1.0,
+                        "structure_weight": 0.8,
+                        "edge_weight": 0.7
+                    }
+                },
+                "medical": {
+                    "enabled": True,
+                    "components": {
+                        "tissue_boundary": True,
+                        "lesion_detection": True,
+                        "contrast_enhancement": True,
+                        "subtle_feature_preservation": True
+                    },
+                    "weights": {
+                        "boundary_weight": 1.0,
+                        "lesion_weight": 0.8,
+                        "contrast_weight": 0.6
+                    }
+                },
+                "agricultural": {
+                    "enabled": True,
+                    "components": {
+                        "texture_analysis": True,
+                        "damage_detection": True,
+                        "color_anomaly": True,
+                        "pattern_enhancement": True,
+                        "morphological_features": True
+                    },
+                    "weights": {
+                        "texture_weight": 1.0,
+                        "damage_weight": 0.8,
+                        "pattern_weight": 0.7
+                    }
+                }
             }
         },
         "training": {
