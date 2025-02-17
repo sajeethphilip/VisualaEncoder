@@ -73,21 +73,7 @@ def download_and_extract(url, extract_to="./data"):
     
     print(f"Dataset extracted to {extract_to}")
 
-def load_dataset(dataset_name, data_dir="./data", train=True):
-    """Load a dataset from torchvision.datasets or a local directory."""
-    transform = transforms.Compose([transforms.ToTensor()])
-    
-    if dataset_name == "CIFAR10":
-        dataset = datasets.CIFAR10(root=data_dir, train=train, download=True, transform=transform)
-    elif dataset_name == "CIFAR100":
-        dataset = datasets.CIFAR100(root=data_dir, train=train, download=True, transform=transform)
-    elif dataset_name == "MNIST":
-        dataset = datasets.MNIST(root=data_dir, train=train, download=True, transform=transform)
-    else:
-        # Load custom dataset from local directory
-        dataset = datasets.ImageFolder(root=os.path.join(data_dir, dataset_name), transform=transform)
-    
-    return dataset
+
 
 def main():
     """Main function for user interaction."""
