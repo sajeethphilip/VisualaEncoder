@@ -38,6 +38,7 @@ from PIL import Image
 import shutil
 
 def setup_dataset(dataset_name):
+    """Set up a torchvision dataset and return a full configuration."""
     # Convert dataset name to uppercase for torchvision
     dataset_name = dataset_name.upper()
     data_dir = os.path.join("data", dataset_name)
@@ -107,6 +108,15 @@ def setup_dataset(dataset_name):
 
             return len(dataset)
 
+        # Save images to their respective folders
+        if combine_data:
+            print("Combining train and test data into training folder...")
+            num_train = save_dataset_to_folders(train_dataset, train_dir, is_train=True, start_idx=0)
+            save_dataset_to_folders(test_dataset, train_dir, is_train=True, start_idx=num_train)
+        else:
+            save_dataset_to_folders(train_dataset, train_dir, is_train=True)
+            save_dataset_to_folders(test_dataset, test_dir, is_train=False)
+
         # Calculate dataset statistics dynamically
         def get_dataset_stats(dataset):
             dataloader = torch.utils.data.DataLoader(dataset, batch_size=1000, shuffle=False)
@@ -127,15 +137,6 @@ def setup_dataset(dataset_name):
             std = (channels_squared_sum / num_samples - mean ** 2) ** 0.5
 
             return mean.tolist(), std.tolist(), num_channels, input_size
-
-        # Save images to their respective folders
-        if combine_data:
-            print("Combining train and test data into training folder...")
-            num_train = save_dataset_to_folders(train_dataset, train_dir, is_train=True, start_idx=0)
-            save_dataset_to_folders(test_dataset, train_dir, is_train=True, start_idx=num_train)
-        else:
-            save_dataset_to_folders(train_dataset, train_dir, is_train=True)
-            save_dataset_to_folders(test_dataset, test_dir, is_train=False)
 
         # Calculate statistics from training set
         mean, std, in_channels, input_size = get_dataset_stats(train_dataset)
@@ -160,6 +161,97 @@ def setup_dataset(dataset_name):
                 "test_dir": test_dir,
                 "image_type": "image",
                 "combined_train_test": combine_data
+            },
+            "model": {
+                "encoder_type": "autoenc",
+                "feature_dims": 128,
+                "learning_rate": 0.001,
+                "optimizer": {
+                    "type": "Adam",
+                    "weight_decay": 0.0001,
+                    "momentum": 0.9,
+                    "beta1": 0.9,
+                    "beta2": 0.999,
+                    "epsilon": 1e-08
+                },
+                "scheduler": {
+                    "type": "ReduceLROnPlateau",
+                    "factor": 0.1,
+                    "patience": 10,
+                    "min_lr": 1e-06,
+                    "verbose": True
+                },
+                "autoencoder_config": {
+                    "reconstruction_weight": 1.0,
+                    "feature_weight": 0.1,
+                    "convergence_threshold": 0.001,
+                    "min_epochs": 10,
+                    "patience": 5,
+                    "enhancements": {
+                        "enabled": True,
+                        "use_kl_divergence": True,
+                        "use_class_encoding": True,
+                        "kl_divergence_weight": 0.5,
+                        "classification_weight": 0.5,
+                        "clustering_temperature": 1.0,
+                        "min_cluster_confidence": 0.7
+                    }
+                }
+            },
+            "training": {
+                "batch_size": 32,
+                "epochs": 20,
+                "num_workers": 4,
+                "checkpoint_dir": os.path.join(data_dir, "checkpoints"),
+                "validation_split": 0.2,
+                "early_stopping": {
+                    "patience": 5,
+                    "min_delta": 0.001
+                }
+            },
+            "augmentation": {
+                "enabled": False,
+                "random_crop": {
+                    "enabled": True,
+                    "padding": 4
+                },
+                "random_rotation": {
+                    "enabled": True,
+                    "degrees": 10
+                },
+                "horizontal_flip": {
+                    "enabled": True,
+                    "probability": 0.5
+                },
+                "vertical_flip": {
+                    "enabled": False
+                },
+                "color_jitter": {
+                    "enabled": True,
+                    "brightness": 0.2,
+                    "contrast": 0.2,
+                    "saturation": 0.2,
+                    "hue": 0.1
+                },
+                "normalize": {
+                    "enabled": True,
+                    "mean": mean,
+                    "std": std
+                }
+            },
+            "logging": {
+                "log_dir": os.path.join(data_dir, "logs"),
+                "tensorboard": {
+                    "enabled": True,
+                    "log_dir": os.path.join(data_dir, "tensorboard")
+                },
+                "save_frequency": 5,
+                "metrics": ["loss", "accuracy", "reconstruction_error"]
+            },
+            "output": {
+                "features_file": os.path.join(data_dir, f"{dataset_name}.csv"),
+                "model_dir": os.path.join(data_dir, "models"),
+                "visualization_dir": os.path.join(data_dir, "visualizations")
             }
         }
 
@@ -168,14 +260,14 @@ def setup_dataset(dataset_name):
         with open(json_path, 'w') as f:
             json.dump(dataset_info, f, indent=4)
 
-        return train_dataset, test_dataset, dataset_info
+        return dataset_info
 
     except AttributeError:
         logging.error(f"Dataset {dataset_name} not found in torchvision.datasets")
-        return None, None, None
+        return None
     except Exception as e:
         logging.error(f"Error setting up dataset: {str(e)}")
-        return None, None, None
+        return None
 
 def get_augmentation_transform(config):
     """Create a data augmentation transform based on the configuration."""
