@@ -213,6 +213,21 @@ def create_default_json_config(dataset_name, data_dir, image_path):
     print(f"Created default JSON configuration file at {json_path}")
     return config
 
+def validate_config(config):
+    """Validate the configuration dictionary."""
+    required_keys = ["dataset", "model", "training", "augmentation", "logging", "output"]
+    for key in required_keys:
+        if key not in config:
+            raise ValueError(f"Missing required key in config: {key}")
+
+    # Validate training-specific keys
+    training_keys = ["batch_size", "epochs", "num_workers", "checkpoint_dir", "validation_split", "early_stopping"]
+    for key in training_keys:
+        if key not in config["training"]:
+            raise ValueError(f"Missing required key in config['training']: {key}")
+
+    print("Configuration is valid.")
+
 def check_and_fix_json(json_path, dataset_name, data_dir, image_path):
     """Check if the JSON file is valid; if not, replace it with a default."""
     try:
@@ -237,12 +252,30 @@ def main():
     print("3. Local file")
     data_source = input("Enter your choice (1/2/3): ")
 
+    config = None  # Initialize config variable
+
     if data_source == "1":
         # Load torchvision dataset
         dataset_name = input("Enter dataset name (e.g., CIFAR10, MNIST, CIFAR100): ").upper()
         data_dir = os.path.join("data", dataset_name)
         os.makedirs(data_dir, exist_ok=True)
         dataset = setup_dataset(dataset_name)
+
+        # Check if JSON file exists and is valid
+        json_path = os.path.join(data_dir, f"{dataset_name}.json")
+        if not os.path.exists(json_path):
+            print(f"JSON configuration file not found at {json_path}. Creating one...")
+            # Find the first image in the dataset
+            for root, _, files in os.walk(data_dir):
+                for file in files:
+                    if file.endswith((".png", ".jpg", ".jpeg")):
+                        image_path = os.path.join(root, file)
+                        config = create_default_json_config(dataset_name, data_dir, image_path)
+                        break
+                break
+        else:
+            config = check_and_fix_json(json_path, dataset_name, data_dir, os.path.join(data_dir, "sample_image.png"))
+
     elif data_source == "2":
         # Download dataset from URL
         url = input("Enter the URL to download the dataset: ")
@@ -279,6 +312,7 @@ def main():
         else:
             # Use the entire dataset
             dataset = datasets.ImageFolder(root=data_dir, transform=transforms.ToTensor())
+
     elif data_source == "3":
         # Load local file
         dataset_name = input("Enter the path to the local dataset folder: ")
@@ -302,8 +336,16 @@ def main():
 
         # Load dataset
         dataset = datasets.ImageFolder(root=data_dir, transform=transforms.ToTensor())
+
     else:
         raise ValueError("Invalid choice. Please select 1, 2, or 3.")
+
+    # Ensure config is loaded
+    if config is None:
+        raise ValueError("Configuration not loaded. Please check the dataset path and JSON file.")
+
+    # Validate the configuration
+    validate_config(config)
 
     # Step 2: Train or Predict
     print("\nSelect mode:")
@@ -318,11 +360,27 @@ def main():
     elif mode == "2":
         # Predict (reconstruct images)
         print("\nReconstructing images...")
-        checkpoint_path = input("Enter the path to the trained model checkpoint: ")
-        image_path = input("Enter the path to the input image: ")
+
+        # Default values for reconstruction
+        default_checkpoint_path = os.path.join(config["training"]["checkpoint_dir"], "best_model.pth")
+        default_image_path = os.path.join(config["dataset"]["train_dir"], "sample_image.png")
+
+        # Prompt user for checkpoint path (with default)
+        checkpoint_path = input(
+            f"Enter the path to the trained model checkpoint (default: {default_checkpoint_path}): "
+        ) or default_checkpoint_path
+
+        # Prompt user for image path (with default)
+        image_path = input(
+            f"Enter the path to the input image (default: {default_image_path}): "
+        ) or default_image_path
+
+        # Reconstruct the image
         reconstruct_image(image_path, checkpoint_path, config)
     else:
         raise ValueError("Invalid choice. Please select 1 or 2.")
 
 if __name__ == "__main__":
     main()
+
+
