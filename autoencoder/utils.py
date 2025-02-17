@@ -17,211 +17,185 @@ from pathlib import Path
 import pandas as pd
 import shutil
 
+import os
+import requests
+import zipfile
+import tarfile
+import gzip
+import shutil
+import json
+from PIL import Image
+from tqdm import tqdm
+
 def download_and_extract(url, extract_to="./data"):
     """
-    Download a file from a URL or load from torchvision and organize into train/test folders.
+    Download a file from a URL, extract it, and organize the data into train/test folders.
     
     Args:
-        url (str): The URL of the file to download or dataset name from torchvision.
+        url (str): The URL of the file to download.
         extract_to (str): The directory to extract the file to.
     
     Returns:
-        str: The path to the processed directory.
+        str: The path to the organized dataset directory.
     """
-    dataset_name = url.split("/")[-1].split(".")[0] if "/" in url else url
-    base_dir = os.path.join(extract_to, dataset_name)
-    raw_dir = os.path.join(base_dir, "raw")
-    train_dir = os.path.join(base_dir, "train")
-    test_dir = os.path.join(base_dir, "test")
+    # Create the extraction directory
+    os.makedirs(extract_to, exist_ok=True)
     
-    # Create necessary directories
-    for dir_path in [raw_dir, train_dir, test_dir]:
-        os.makedirs(dir_path, exist_ok=True)
+    # Get the filename from the URL
+    filename = os.path.join(extract_to, url.split("/")[-1])
     
-    # Check if it's a torchvision dataset
-    if "/" not in url and hasattr(datasets, url):
-        return process_torchvision_dataset(url, base_dir)
-    
-    # Download and extract if it's a URL
-    filename = download_file(url, raw_dir)
-    if not filename:
-        return None
-    
-    # Extract the downloaded file
-    extracted_path = extract_file(filename, raw_dir)
-    if not extracted_path:
-        return None
-    
-    # Process the extracted data
-    process_extracted_data(raw_dir, train_dir, test_dir)
-    
-    return base_dir
-
-def download_file(url, raw_dir):
-    """Download file from URL with progress bar."""
-    filename = os.path.join(raw_dir, url.split("/")[-1])
-    
+    # Download the file with a progress bar
+    print(f"Downloading {url}...")
     try:
         response = requests.get(url, stream=True)
-        response.raise_for_status()
+        response.raise_for_status()  # Raise an error for bad status codes
         
+        # Get the total file size
         total_size = int(response.headers.get("content-length", 0))
         
+        # Download the file in chunks
         with open(filename, "wb") as f, tqdm(
             desc=filename,
             total=total_size,
             unit="B",
             unit_scale=True,
             unit_divisor=1024,
-        ) as pbar:
+        ) as progress_bar:
             for chunk in response.iter_content(chunk_size=1024):
                 if chunk:
                     f.write(chunk)
-                    pbar.update(len(chunk))
+                    progress_bar.update(len(chunk))
         
-        return filename
+        print(f"Download complete: {filename}")
     except requests.exceptions.RequestException as e:
         print(f"Failed to download {url}: {e}")
         return None
-
-def extract_file(filename, extract_to):
-    """Extract compressed file to specified directory."""
+    
+    # Extract the file
+    print(f"Extracting {filename}...")
     try:
         if filename.endswith(".zip"):
             with zipfile.ZipFile(filename, "r") as zip_ref:
                 zip_ref.extractall(extract_to)
-        elif filename.endswith((".tar.gz", ".tgz")):
+        elif filename.endswith(".tar.gz") or filename.endswith(".tgz"):
             with tarfile.open(filename, "r:gz") as tar_ref:
                 tar_ref.extractall(extract_to)
         elif filename.endswith(".tar"):
             with tarfile.open(filename, "r:") as tar_ref:
                 tar_ref.extractall(extract_to)
-        elif filename.endswith(".gz"):
-            output_file = filename[:-3]
-            with gzip.open(filename, 'rb') as f_in:
-                with open(output_file, 'wb') as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-        return extract_to
-    except Exception as e:
+        else:
+            print(f"Unsupported file format: {filename}")
+            return None
+        
+        print(f"Extraction complete: {extract_to}")
+    except (zipfile.BadZipFile, tarfile.TarError) as e:
         print(f"Failed to extract {filename}: {e}")
         return None
+    
+    # Organize the data into train/test folders
+    organize_data(extract_to)
+    
+    # Create JSON configuration file
+    create_json_config(extract_to)
+    
+    return extract_to
 
-def process_torchvision_dataset(dataset_name, base_dir):
-    """Process built-in torchvision datasets."""
-    dataset_class = getattr(datasets, dataset_name)
+def organize_data(data_dir):
+    """
+    Organize the dataset into train/test folders.
     
-    # Download and process training data
-    train_dataset = dataset_class(base_dir, train=True, download=True)
-    test_dataset = dataset_class(base_dir, train=False, download=True)
+    Args:
+        data_dir (str): The directory containing the extracted dataset.
+    """
+    # Check if train/test folders already exist
+    train_dir = os.path.join(data_dir, "train")
+    test_dir = os.path.join(data_dir, "test")
     
-    # Create train/test directories
-    train_dir = os.path.join(base_dir, "train")
-    test_dir = os.path.join(base_dir, "test")
+    if os.path.exists(train_dir) and os.path.exists(test_dir):
+        print("Train and test folders already exist. Skipping organization.")
+        return
+    
+    # Create train and test folders
     os.makedirs(train_dir, exist_ok=True)
     os.makedirs(test_dir, exist_ok=True)
     
-    # Process and save training data
-    process_dataset(train_dataset, train_dir)
-    process_dataset(test_dataset, test_dir)
-    
-    return base_dir
-
-def process_dataset(dataset, output_dir):
-    """Process and save dataset images to appropriate directories."""
-    for idx, (data, label) in enumerate(dataset):
-        # Create label directory
-        label_dir = os.path.join(output_dir, str(label))
-        os.makedirs(label_dir, exist_ok=True)
-        
-        # Convert data to image and save
-        if isinstance(data, torch.Tensor):
-            data = transforms.ToPILImage()(data)
-        elif isinstance(data, np.ndarray):
-            data = Image.fromarray(data)
-        
-        data.save(os.path.join(label_dir, f"{idx}.png"))
-
-def process_extracted_data(raw_dir, train_dir, test_dir):
-    """Process extracted data and organize into train/test folders."""
-    for root, dirs, files in os.walk(raw_dir):
+    # Search for images and organize them
+    print("Organizing data into train/test folders...")
+    for root, _, files in os.walk(data_dir):
         for file in files:
-            file_path = os.path.join(root, file)
-            
-            # Determine if file belongs to train or test set
-            is_train = "train" in root.lower() or "train" in file.lower()
-            output_dir = train_dir if is_train else test_dir
-            
             if file.endswith((".png", ".jpg", ".jpeg")):
-                process_image_file(file_path, output_dir)
-            elif file.endswith((".idx3-ubyte", ".idx1-ubyte")):
-                process_idx_file(file_path, output_dir)
-            elif file.endswith((".csv", ".tsv")):
-                process_tabular_file(file_path, output_dir)
+                # Move the image to the train or test folder
+                src_path = os.path.join(root, file)
+                if "train" in root.lower():
+                    dest_dir = train_dir
+                elif "test" in root.lower():
+                    dest_dir = test_dir
+                else:
+                    # Default to train folder
+                    dest_dir = train_dir
+                
+                # Create subdirectories based on labels (if available)
+                label = os.path.basename(root)
+                dest_dir = os.path.join(dest_dir, label)
+                os.makedirs(dest_dir, exist_ok=True)
+                
+                # Move the file
+                dest_path = os.path.join(dest_dir, file)
+                shutil.move(src_path, dest_path)
+    
+    print(f"Data organized into {train_dir} and {test_dir}")
 
-def process_image_file(file_path, output_dir):
-    """Process individual image file."""
-    try:
-        image = Image.open(file_path)
-        # Extract label from parent directory name
-        label = os.path.basename(os.path.dirname(file_path))
-        if not label.isdigit():
-            label = "0"  # Default label if none found
-        
-        label_dir = os.path.join(output_dir, label)
-        os.makedirs(label_dir, exist_ok=True)
-        
-        # Save image with original filename
-        new_path = os.path.join(label_dir, os.path.basename(file_path))
-        image.save(new_path)
-    except Exception as e:
-        print(f"Failed to process image {file_path}: {e}")
-
-def process_idx_file(file_path, output_dir):
-    """Process IDX format files (MNIST-style datasets)."""
-    try:
-        if "images" in file_path:
-            images = read_idx3_ubyte(file_path)
-            labels = read_idx1_ubyte(file_path.replace("images", "labels"))
-            save_images_and_labels(images, labels, output_dir)
-    except Exception as e:
-        print(f"Failed to process IDX file {file_path}: {e}")
-
-def process_tabular_file(file_path, output_dir):
-    """Process tabular data files."""
-    try:
-        df = pd.read_csv(file_path, sep="," if file_path.endswith(".csv") else "\t")
-        # Save processed DataFrame
-        output_path = os.path.join(output_dir, os.path.basename(file_path))
-        df.to_csv(output_path, index=False)
-    except Exception as e:
-        print(f"Failed to process tabular file {file_path}: {e}")
-
-def read_idx3_ubyte(file_path):
-    """Read IDX3-UBYTE format image file."""
-    with open(file_path, "rb") as f:
-        magic = int.from_bytes(f.read(4), byteorder="big")
-        size = int.from_bytes(f.read(4), byteorder="big")
-        rows = int.from_bytes(f.read(4), byteorder="big")
-        cols = int.from_bytes(f.read(4), byteorder="big")
-        buf = f.read()
-        data = np.frombuffer(buf, dtype=np.uint8)
-        return data.reshape(size, rows, cols)
-
-def read_idx1_ubyte(file_path):
-    """Read IDX1-UBYTE format label file."""
-    with open(file_path, "rb") as f:
-        magic = int.from_bytes(f.read(4), byteorder="big")
-        size = int.from_bytes(f.read(4), byteorder="big")
-        return np.frombuffer(f.read(), dtype=np.uint8)
-
-def save_images_and_labels(images, labels, output_dir):
-    """Save images with their corresponding labels."""
-    for idx, (image, label) in enumerate(zip(images, labels)):
-        label_dir = os.path.join(output_dir, str(label))
-        os.makedirs(label_dir, exist_ok=True)
-        
-        image_path = os.path.join(label_dir, f"{idx}.png")
-        Image.fromarray(image).save(image_path)
+def create_json_config(data_dir):
+    """
+    Create a JSON configuration file for the dataset.
+    
+    Args:
+        data_dir (str): The directory containing the organized dataset.
+    """
+    # Determine input size and number of classes
+    train_dir = os.path.join(data_dir, "train")
+    test_dir = os.path.join(data_dir, "test")
+    
+    # Get the first image to determine input size
+    first_image_path = None
+    for root, _, files in os.walk(train_dir):
+        if files:
+            first_image_path = os.path.join(root, files[0])
+            break
+    
+    if first_image_path:
+        image = Image.open(first_image_path)
+        input_size = list(image.size)  # Width x Height
+        in_channels = 1 if image.mode == "L" else 3  # Grayscale or RGB
+    else:
+        input_size = [32, 32]  # Default size
+        in_channels = 3  # Default channels
+    
+    # Count the number of classes
+    num_classes = len(os.listdir(train_dir))
+    
+    # Create JSON configuration
+    config = {
+        "dataset": {
+            "name": os.path.basename(data_dir),
+            "type": "custom",
+            "in_channels": in_channels,
+            "num_classes": num_classes,
+            "input_size": input_size,
+            "mean": [0.5] * in_channels,  # Default mean
+            "std": [0.5] * in_channels,  # Default std
+            "train_dir": train_dir,
+            "test_dir": test_dir,
+            "image_type": "grayscale" if in_channels == 1 else "rgb"
+        }
+    }
+    
+    # Save JSON file
+    json_path = os.path.join(data_dir, f"{os.path.basename(data_dir)}.json")
+    with open(json_path, "w") as f:
+        json.dump(config, f, indent=4)
+    
+    print(f"Created JSON configuration file at {json_path}")
         
 #-------------------------------
     
