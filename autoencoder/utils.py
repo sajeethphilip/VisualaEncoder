@@ -9,7 +9,32 @@ from sklearn.manifold import TSNE
 import os
 import pickle
 
-
+def download_and_extract(url, extract_to="./data"):
+    """Download and extract a dataset from a URL."""
+    os.makedirs(extract_to, exist_ok=True)
+    filename = os.path.join(extract_to, url.split("/")[-1])
+    
+    # Download the file
+    print(f"Downloading {url}...")
+    response = requests.get(url, stream=True)
+    with open(filename, "wb") as f:
+        for chunk in response.iter_content(chunk_size=1024):
+            if chunk:
+                f.write(chunk)
+    
+    # Extract the file
+    print(f"Extracting {filename}...")
+    if filename.endswith(".zip"):
+        with zipfile.ZipFile(filename, "r") as zip_ref:
+            zip_ref.extractall(extract_to)
+    elif filename.endswith(".tar.gz") or filename.endswith(".tar"):
+        with tarfile.open(filename, "r:*") as tar_ref:
+            tar_ref.extractall(extract_to)
+    else:
+        raise ValueError(f"Unsupported file format: {filename}")
+    
+    print(f"Dataset extracted to {extract_to}")
+    
 def save_latent_space(latent, dataset_name, filename="latent.pkl"):
     """Save the latent space as a pickle file."""
     data_dir = f"data/{dataset_name}"
