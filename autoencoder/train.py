@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from autoencoder.model import Autoencoder
 from autoencoder.data_loader import load_torchvision_dataset, download_and_extract, load_local_dataset
-from autoencoder.utils import get_device
+from autoencoder.utils import get_device,save_latent_space,save_embeddings_as_csv,visualize_embeddings,postprocess_image,load_latent_from_csv
 import torch.nn.functional as F
 
 import torch
