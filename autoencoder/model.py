@@ -39,4 +39,4 @@ class Autoencoder(nn.Module):
         latent = self.encoder(x)
         embedding = self.embedding(latent)  # Map latent space to embedding space
         reconstructed = self.decoder(embedding)
-        return reconstructed, embedding
+        return reconstructed, latent, embedding
