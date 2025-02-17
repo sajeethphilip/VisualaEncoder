@@ -37,22 +37,6 @@ def save_embeddings_as_csv(embeddings, dataset_name, filename="embeddings.csv"):
         writer.writerow(embeddings)
     
     print(f"Embeddings saved to {csv_path}")
-def save_embeddings_as_csv(embeddings, dataset_name, filename="embeddings.csv"):
-    """Save the embedded tensors as a flattened 1D CSV file."""
-    # Create data directory
-    data_dir = f"data/{dataset_name}"
-    os.makedirs(data_dir, exist_ok=True)
-    
-    # Flatten and convert to numpy array
-    embeddings = embeddings.flatten().detach().cpu().numpy()
-    
-    # Save as CSV
-    csv_path = os.path.join(data_dir, filename)
-    with open(csv_path, "w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(embeddings)
-    
-    print(f"Embeddings saved to {csv_path}")
     
 def visualize_embeddings(embeddings, labels, title="Embedding Space"):
     """Visualize the embedding space using t-SNE."""
@@ -77,22 +61,6 @@ def get_device():
     else:
         return torch.device("cpu")
         
-def save_latent_as_csv(latent_vector, dataset_name, filename="latent.csv"):
-    """Save the latent vector as a flattened 1D CSV file."""
-    # Create data directory
-    data_dir = f"data/{dataset_name}"
-    os.makedirs(data_dir, exist_ok=True)
-    
-    # Flatten and convert to numpy array
-    latent_vector = latent_vector.flatten().detach().numpy()
-    
-    # Save as CSV
-    csv_path = os.path.join(data_dir, filename)
-    with open(csv_path, "w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(latent_vector)
-    
-    print(f"Latent space saved to {csv_path}")
     
 def postprocess_image(image_tensor):
     """Convert a tensor back to a PIL image."""
@@ -109,17 +77,3 @@ def postprocess_image(image_tensor):
     image = transforms.ToPILImage()(image_tensor)
     return imagem(image).unsqueeze(0)  # Add batch dimension
     return image_tensor
-
-def postprocess_image(image_tensor):
-    """Convert a tensor back to a PIL image."""
-    image_tensor = image_tensor.squeeze(0).permute(1, 2, 0)  # Remove batch dimension and rearrange
-    image = transforms.ToPILImage()(image_tensor)
-    return image
-
-def load_latent_from_csv(filename="latent.csv"):
-    """Load the latent vector from a CSV file."""
-    with open(filename, "r") as csvfile:
-        reader = csv.reader(csvfile)
-        latent_vector = next(reader)  # Read the first row
-    latent_vector = torch.tensor([float(x) for x in latent_vector], dtype=torch.float32)
-    return latent_vector
