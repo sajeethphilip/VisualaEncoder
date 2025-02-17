@@ -6,14 +6,22 @@ from PIL import Image
 from autoencoder.train import train_model
 from autoencoder.reconstruct import reconstruct_image
 from autoencoder.data_loader import load_local_dataset, load_dataset_config
-from autoencoder.utils import download_and_extract,setup_dataset
+from autoencoder.utils import download_and_extract, setup_dataset
 
-def create_json_config(dataset_name, data_dir, image_path):
-    """Create a JSON configuration file by reading the first image in the dataset."""
+def create_default_json_config(dataset_name, data_dir, image_path):
+    """Create a default JSON configuration file interactively."""
     # Read the first image to determine its shape
     image = Image.open(image_path)
     width, height = image.size
     in_channels = 1 if image.mode == "L" else 3  # Grayscale or RGB
+
+    # Interactive configuration
+    print("\nConfiguring the autoencoder...")
+    latent_dim = int(input("Enter the latent space dimension (default: 128): ") or 128)
+    embedding_dim = int(input("Enter the embedding dimension (default: 64): ") or 64)
+    learning_rate = float(input("Enter the learning rate (default: 0.001): ") or 0.001)
+    batch_size = int(input("Enter the batch size (default: 32): ") or 32)
+    epochs = int(input("Enter the number of epochs (default: 20): ") or 20)
 
     # Create JSON configuration
     config = {
@@ -28,6 +36,97 @@ def create_json_config(dataset_name, data_dir, image_path):
             "train_dir": os.path.join(data_dir, "train"),
             "test_dir": os.path.join(data_dir, "test"),
             "image_type": "grayscale" if in_channels == 1 else "rgb"
+        },
+        "model": {
+            "encoder_type": "autoenc",
+            "feature_dims": latent_dim,
+            "learning_rate": learning_rate,
+            "optimizer": {
+                "type": "Adam",
+                "weight_decay": 0.0001,
+                "momentum": 0.9,
+                "beta1": 0.9,
+                "beta2": 0.999,
+                "epsilon": 1e-08
+            },
+            "scheduler": {
+                "type": "ReduceLROnPlateau",
+                "factor": 0.1,
+                "patience": 10,
+                "min_lr": 1e-06,
+                "verbose": True
+            },
+            "autoencoder_config": {
+                "reconstruction_weight": 1.0,
+                "feature_weight": 0.1,
+                "convergence_threshold": 0.001,
+                "min_epochs": 10,
+                "patience": 5,
+                "enhancements": {
+                    "enabled": True,
+                    "use_kl_divergence": True,
+                    "use_class_encoding": True,
+                    "kl_divergence_weight": 0.5,
+                    "classification_weight": 0.5,
+                    "clustering_temperature": 1.0,
+                    "min_cluster_confidence": 0.7
+                }
+            }
+        },
+        "training": {
+            "batch_size": batch_size,
+            "epochs": epochs,
+            "num_workers": 4,
+            "checkpoint_dir": os.path.join(data_dir, "checkpoints"),
+            "validation_split": 0.2,
+            "early_stopping": {
+                "patience": 5,
+                "min_delta": 0.001
+            }
+        },
+        "augmentation": {
+            "enabled": False,
+            "random_crop": {
+                "enabled": True,
+                "padding": 4
+            },
+            "random_rotation": {
+                "enabled": True,
+                "degrees": 10
+            },
+            "horizontal_flip": {
+                "enabled": True,
+                "probability": 0.5
+            },
+            "vertical_flip": {
+                "enabled": False
+            },
+            "color_jitter": {
+                "enabled": True,
+                "brightness": 0.2,
+                "contrast": 0.2,
+                "saturation": 0.2,
+                "hue": 0.1
+            },
+            "normalize": {
+                "enabled": True,
+                "mean": [0.5] * in_channels,
+                "std": [0.5] * in_channels
+            }
+        },
+        "logging": {
+            "log_dir": os.path.join(data_dir, "logs"),
+            "tensorboard": {
+                "enabled": True,
+                "log_dir": os.path.join(data_dir, "tensorboard")
+            },
+            "save_frequency": 5,
+            "metrics": ["loss", "accuracy", "reconstruction_error"]
+        },
+        "output": {
+            "features_file": os.path.join(data_dir, f"{dataset_name}.csv"),
+            "model_dir": os.path.join(data_dir, "models"),
+            "visualization_dir": os.path.join(data_dir, "visualizations")
         }
     }
 
@@ -36,7 +135,7 @@ def create_json_config(dataset_name, data_dir, image_path):
     with open(json_path, "w") as f:
         json.dump(config, f, indent=4)
 
-    print(f"Created JSON configuration file at {json_path}")
+    print(f"Created default JSON configuration file at {json_path}")
     return config
 
 def check_and_fix_json(json_path, dataset_name, data_dir, image_path):
@@ -50,8 +149,7 @@ def check_and_fix_json(json_path, dataset_name, data_dir, image_path):
         return config
     except (json.JSONDecodeError, ValueError, FileNotFoundError):
         print(f"Invalid or corrupted JSON file at {json_path}. Replacing with default...")
-        return create_json_config(dataset_name, data_dir, image_path)
-
+        return create_default_json_config(dataset_name, data_dir, image_path)
 
 def main():
     """Main function for user interaction."""
@@ -86,7 +184,7 @@ def main():
                 for file in files:
                     if file.endswith((".png", ".jpg", ".jpeg")):
                         image_path = os.path.join(root, file)
-                        config = create_json_config(dataset_name, data_dir, image_path)
+                        config = create_default_json_config(dataset_name, data_dir, image_path)
                         break
                 break
         else:
@@ -121,7 +219,7 @@ def main():
                 for file in files:
                     if file.endswith((".png", ".jpg", ".jpeg")):
                         image_path = os.path.join(root, file)
-                        config = create_json_config(dataset_name, data_dir, image_path)
+                        config = create_default_json_config(dataset_name, data_dir, image_path)
                         break
                 break
         else:
@@ -141,13 +239,13 @@ def main():
     if mode == "1":
         # Train the model
         print("\nTraining the model...")
-        train_model(dataset_name)  # Pass only dataset_name
+        train_model(config)  # Pass the configuration
     elif mode == "2":
         # Predict (reconstruct images)
         print("\nReconstructing images...")
         checkpoint_path = input("Enter the path to the trained model checkpoint: ")
         image_path = input("Enter the path to the input image: ")
-        reconstruct_image(image_path, checkpoint_path, dataset_name)
+        reconstruct_image(image_path, checkpoint_path, config)
     else:
         raise ValueError("Invalid choice. Please select 1 or 2.")
 
