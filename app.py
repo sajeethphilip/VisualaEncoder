@@ -1,13 +1,13 @@
 import streamlit as st
 import torch
 from autoencoder.model import Autoencoder
-from autoencoder.utils import preprocess_image, postprocess_image, save_latent_as_csv, load_latent_from_csv, get_device
+from autoencoder.utils import preprocess_image, postprocess_image, save_embeddings_as_csv, load_latent_from_csv, get_device
 from interface.region_marking import mark_region
 from interface.sliders import create_sliders
 from interface.visualization import display_image
 
 # Load the trained autoencoder
-model = Autoencoder(latent_dim=128)
+model = Autoencoder(latent_dim=128, embedding_dim=64)
 dataset_name = "CIFAR10"  # Replace with the dataset name used during training
 checkpoint_path = f"Model/checkpoint/Best_{dataset_name}.pth"
 
@@ -35,13 +35,13 @@ if uploaded_image is not None:
     pil_image = postprocess_image(image_tensor.cpu())  # Move tensor back to CPU for visualization
     display_image(pil_image, "Uploaded Image")
 
-    # Encode the image to get the latent vector
-    _, latent_vector = model(image_tensor)
+    # Encode the image to get the latent vector and embeddings
+    _, embeddings = model(image_tensor)
 
-    # Save latent vector as CSV
-    if st.button("Save Latent Space as CSV"):
-        save_latent_as_csv(latent_vector.cpu(), dataset_name, "latent.csv")  # Move tensor back to CPU
-        st.success(f"Latent space saved to data/{dataset_name}/latent.csv")
+    # Save embeddings as CSV
+    if st.button("Save Embeddings as CSV"):
+        save_embeddings_as_csv(embeddings, dataset_name, "embeddings.csv")
+        st.success(f"Embeddings saved to data/{dataset_name}/embeddings.csv")
 
     # Mark region of interest
     st.write("Mark the region of interest:")
