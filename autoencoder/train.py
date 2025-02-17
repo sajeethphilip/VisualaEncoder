@@ -15,7 +15,7 @@ def train_model(config):
     dataset_config = config["dataset"]
     train_dataset = load_local_dataset(dataset_config["name"])
     train_loader = DataLoader(train_dataset, batch_size=config["training"]["batch_size"], shuffle=True)
-
+    device=get_device()
     # Initialize model
     model = Autoencoder(config).to(device)
 
