@@ -122,7 +122,7 @@ for epoch in range(epochs):
         for batch in val_loader:
             images, _ = batch
             images = images.to(device)  # Move data to the same device as the model
-            reconstructed, _ = model(images)
+            reconstructed, _,_ = model(images)
             loss = criterion(reconstructed, images)
             val_loss += loss.item()
     
