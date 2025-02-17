@@ -148,3 +148,27 @@ for epoch in range(epochs):
         if epochs_without_improvement >= patience:
             print(f"Early stopping after {patience} epochs without improvement.")
             break
+# After training, save latent space and embeddings for the entire dataset
+model.eval()
+latent_space = []
+embeddings_space = []
+
+with torch.no_grad():
+    for batch in train_loader:
+        images, _ = batch
+        images = images.to(device)
+        
+        # Forward pass
+        _, latent, embeddings = model(images)
+        
+        # Store latent and embeddings
+        latent_space.append(latent.cpu())
+        embeddings_space.append(embeddings.cpu())
+
+# Concatenate all batches
+latent_space = torch.cat(latent_space, dim=0)
+embeddings_space = torch.cat(embeddings_space, dim=0)
+
+# Save latent space and embeddings
+save_latent_space(latent_space, dataset_name, "latent.pkl")
+save_embeddings_as_csv(embeddings_space, dataset_name, "embeddings.csv")
