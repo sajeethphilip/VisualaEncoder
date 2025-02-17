@@ -4,6 +4,7 @@ from torchvision import transforms
 from PIL import Image
 from autoencoder.model import Autoencoder
 from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv
+from autoencoder.data_loader import load_dataset_config
 
 def load_model(checkpoint_path, device):
     """Load the trained autoencoder model."""
@@ -33,14 +34,14 @@ def enhance_features(latent, embedding, model, enhancement_factor=2.0):
     """
     # Identify decisive features (e.g., regions with high embedding values)
     decisive_features = torch.abs(embedding).mean(dim=1, keepdim=True)
-    
+
     # Enhance decisive features in the latent space
     enhanced_latent = latent + enhancement_factor * decisive_features
-    
+
     # Reconstruct the image
     with torch.no_grad():
         reconstructed_image = model.decoder(enhanced_latent)
-    
+
     return reconstructed_image
 
 def save_reconstructed_image(image_tensor, dataset_name, filename="reconstructed.png"):
@@ -48,10 +49,10 @@ def save_reconstructed_image(image_tensor, dataset_name, filename="reconstructed
     # Create reconstructed images directory
     recon_dir = f"data/{dataset_name}/reconstructed_images"
     os.makedirs(recon_dir, exist_ok=True)
-    
+
     # Convert tensor to PIL image
     image = transforms.ToPILImage()(image_tensor.squeeze(0).cpu())
-    
+
     # Save the image
     image_path = os.path.join(recon_dir, filename)
     image.save(image_path)
@@ -61,9 +62,9 @@ def reconstruct_image(image_path, checkpoint_path, dataset_name, enhancement_fac
     """Reconstruct an image with enhanced features."""
     # Detect device
     device = get_device()
-    
+
     config = load_dataset_config(dataset_name)
-    
+
     # Initialize model
     model = Autoencoder(
         in_channels=config["in_channels"],
@@ -71,22 +72,22 @@ def reconstruct_image(image_path, checkpoint_path, dataset_name, enhancement_fac
         latent_dim=128,
         embedding_dim=64
     ).to(get_device())
-    
+
     # Load checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=get_device())
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
-    
+
     # Preprocess the input image
     image_tensor = preprocess_image(image_path, device)
-    
+
     # Generate latent space and embeddings
     with torch.no_grad():
         _, latent, embeddings = model(image_tensor)
-    
+
     # Enhance decisive features and reconstruct the image
     enhanced_image = enhance_features(latent, embeddings, model, enhancement_factor)
-    
+
     # Save the reconstructed image
     save_reconstructed_image(enhanced_image, dataset_name)
 
