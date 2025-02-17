@@ -21,7 +21,6 @@ import os
 import requests
 import zipfile
 import tarfile
-import gzip
 import shutil
 import json
 from PIL import Image
@@ -29,20 +28,24 @@ from tqdm import tqdm
 
 def download_and_extract(url, extract_to="./data"):
     """
-    Download a file from a URL, extract it, and organize the data into train/test folders.
+    Download a file from a URL, extract it to a temporary folder, and organize the data into train/test folders.
     
     Args:
         url (str): The URL of the file to download.
-        extract_to (str): The directory to extract the file to.
+        extract_to (str): The base directory to organize the dataset (e.g., "./data/CIFAR100").
     
     Returns:
         str: The path to the organized dataset directory.
     """
-    # Create the extraction directory
+    # Create the base directory
     os.makedirs(extract_to, exist_ok=True)
     
+    # Create a temporary directory for downloading and extracting
+    temp_dir = os.path.join("temp", os.path.basename(extract_to))
+    os.makedirs(temp_dir, exist_ok=True)
+    
     # Get the filename from the URL
-    filename = os.path.join(extract_to, url.split("/")[-1])
+    filename = os.path.join(temp_dir, url.split("/")[-1])
     
     # Download the file with a progress bar
     print(f"Downloading {url}...")
@@ -76,52 +79,51 @@ def download_and_extract(url, extract_to="./data"):
     try:
         if filename.endswith(".zip"):
             with zipfile.ZipFile(filename, "r") as zip_ref:
-                zip_ref.extractall(extract_to)
+                zip_ref.extractall(temp_dir)
         elif filename.endswith(".tar.gz") or filename.endswith(".tgz"):
             with tarfile.open(filename, "r:gz") as tar_ref:
-                tar_ref.extractall(extract_to)
+                tar_ref.extractall(temp_dir)
         elif filename.endswith(".tar"):
             with tarfile.open(filename, "r:") as tar_ref:
-                tar_ref.extractall(extract_to)
+                tar_ref.extractall(temp_dir)
         else:
             print(f"Unsupported file format: {filename}")
             return None
         
-        print(f"Extraction complete: {extract_to}")
+        print(f"Extraction complete: {temp_dir}")
     except (zipfile.BadZipFile, tarfile.TarError) as e:
         print(f"Failed to extract {filename}: {e}")
         return None
     
     # Organize the data into train/test folders
-    organize_data(extract_to)
+    organize_data(temp_dir, extract_to)
     
     # Create JSON configuration file
     create_json_config(extract_to)
     
+    # Clean up the temporary directory
+    shutil.rmtree(temp_dir)
+    print(f"Cleaned up temporary directory: {temp_dir}")
+    
     return extract_to
 
-def organize_data(data_dir):
+def organize_data(temp_dir, extract_to):
     """
     Organize the dataset into train/test folders.
     
     Args:
-        data_dir (str): The directory containing the extracted dataset.
+        temp_dir (str): The temporary directory containing the extracted dataset.
+        extract_to (str): The base directory to organize the dataset (e.g., "./data/CIFAR100").
     """
-    # Check if train/test folders already exist
-    train_dir = os.path.join(data_dir, "train")
-    test_dir = os.path.join(data_dir, "test")
-    
-    if os.path.exists(train_dir) and os.path.exists(test_dir):
-        print("Train and test folders already exist. Skipping organization.")
-        return
-    
     # Create train and test folders
+    train_dir = os.path.join(extract_to, "train")
+    test_dir = os.path.join(extract_to, "test")
     os.makedirs(train_dir, exist_ok=True)
     os.makedirs(test_dir, exist_ok=True)
     
     # Search for images and organize them
     print("Organizing data into train/test folders...")
-    for root, _, files in os.walk(data_dir):
+    for root, _, files in os.walk(temp_dir):
         for file in files:
             if file.endswith((".png", ".jpg", ".jpeg")):
                 # Move the image to the train or test folder
