@@ -9,31 +9,76 @@ from sklearn.manifold import TSNE
 import os
 import pickle
 
+import requests
+import zipfile
+import tarfile
+from tqdm import tqdm
+
 def download_and_extract(url, extract_to="./data"):
-    """Download and extract a dataset from a URL."""
+    """
+    Download a file from a URL and extract it to the specified directory.
+    
+    Args:
+        url (str): The URL of the file to download.
+        extract_to (str): The directory to extract the file to.
+    
+    Returns:
+        str: The path to the extracted directory.
+    """
+    # Create the extraction directory
     os.makedirs(extract_to, exist_ok=True)
+    
+    # Get the filename from the URL
     filename = os.path.join(extract_to, url.split("/")[-1])
     
-    # Download the file
+    # Download the file with a progress bar
     print(f"Downloading {url}...")
-    response = requests.get(url, stream=True)
-    with open(filename, "wb") as f:
-        for chunk in response.iter_content(chunk_size=1024):
-            if chunk:
-                f.write(chunk)
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()  # Raise an error for bad status codes
+        
+        # Get the total file size
+        total_size = int(response.headers.get("content-length", 0))
+        
+        # Download the file in chunks
+        with open(filename, "wb") as f, tqdm(
+            desc=filename,
+            total=total_size,
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1024,
+        ) as progress_bar:
+            for chunk in response.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
+                    progress_bar.update(len(chunk))
+        
+        print(f"Download complete: {filename}")
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to download {url}: {e}")
+        return None
     
     # Extract the file
     print(f"Extracting {filename}...")
-    if filename.endswith(".zip"):
-        with zipfile.ZipFile(filename, "r") as zip_ref:
-            zip_ref.extractall(extract_to)
-    elif filename.endswith(".tar.gz") or filename.endswith(".tar"):
-        with tarfile.open(filename, "r:*") as tar_ref:
-            tar_ref.extractall(extract_to)
-    else:
-        raise ValueError(f"Unsupported file format: {filename}")
-    
-    print(f"Dataset extracted to {extract_to}")
+    try:
+        if filename.endswith(".zip"):
+            with zipfile.ZipFile(filename, "r") as zip_ref:
+                zip_ref.extractall(extract_to)
+        elif filename.endswith(".tar.gz") or filename.endswith(".tgz"):
+            with tarfile.open(filename, "r:gz") as tar_ref:
+                tar_ref.extractall(extract_to)
+        elif filename.endswith(".tar"):
+            with tarfile.open(filename, "r:") as tar_ref:
+                tar_ref.extractall(extract_to)
+        else:
+            print(f"Unsupported file format: {filename}")
+            return None
+        
+        print(f"Extraction complete: {extract_to}")
+        return extract_to
+    except (zipfile.BadZipFile, tarfile.TarError) as e:
+        print(f"Failed to extract {filename}: {e}")
+        return None
     
 def save_latent_space(latent, dataset_name, filename="latent.pkl"):
     """Save the latent space as a pickle file."""
