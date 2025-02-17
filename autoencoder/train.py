@@ -95,13 +95,16 @@ for epoch in range(epochs):
         labels = labels.to(device)
         
         optimizer.zero_grad()
-        reconstructed, embeddings = model(images)
+        
+        # Forward pass
+        reconstructed, latent, embeddings = model(images)  # Unpack all three outputs
         
         # Compute losses
         loss_recon = criterion_recon(reconstructed, images)
         loss_embed = criterion_embed(embeddings, labels)
         loss = loss_recon + loss_embed  # Combine losses
         
+        # Backward pass and optimization
         loss.backward()
         optimizer.step()
         
