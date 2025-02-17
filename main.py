@@ -5,8 +5,8 @@ from torchvision import datasets, transforms
 from PIL import Image
 from autoencoder.train import train_model
 from autoencoder.reconstruct import reconstruct_image
-from autoencoder.data_loader import load_dataset, load_dataset_config
-from autoencoder.utils import download_and_extract
+from autoencoder.data_loader import load_local_dataset, load_dataset_config
+from autoencoder.utils import download_and_extract,setup_dataset
 
 def create_json_config(dataset_name, data_dir, image_path):
     """Create a JSON configuration file by reading the first image in the dataset."""
@@ -14,7 +14,7 @@ def create_json_config(dataset_name, data_dir, image_path):
     image = Image.open(image_path)
     width, height = image.size
     in_channels = 1 if image.mode == "L" else 3  # Grayscale or RGB
-    
+
     # Create JSON configuration
     config = {
         "dataset": {
@@ -30,12 +30,12 @@ def create_json_config(dataset_name, data_dir, image_path):
             "image_type": "grayscale" if in_channels == 1 else "rgb"
         }
     }
-    
+
     # Save JSON file
     json_path = os.path.join(data_dir, f"{dataset_name}.json")
     with open(json_path, "w") as f:
         json.dump(config, f, indent=4)
-    
+
     print(f"Created JSON configuration file at {json_path}")
     return config
 
@@ -51,47 +51,32 @@ def check_and_fix_json(json_path, dataset_name, data_dir, image_path):
     except (json.JSONDecodeError, ValueError, FileNotFoundError):
         print(f"Invalid or corrupted JSON file at {json_path}. Replacing with default...")
         return create_json_config(dataset_name, data_dir, image_path)
-        
+
 
 def main():
     """Main function for user interaction."""
     print("Welcome to the Autoencoder Tool!")
-    
+
     # Step 1: Select data source
     print("\nSelect data source:")
     print("1. Torchvision dataset (e.g., CIFAR10, MNIST)")
     print("2. URL to download dataset")
     print("3. Local file")
     data_source = input("Enter your choice (1/2/3): ")
-    
+
     if data_source == "1":
         # Load torchvision dataset
-        dataset_name = input("Enter dataset name (e.g., CIFAR10, MNIST, CIFAR100): ")
+        dataset_name = input("Enter dataset name (e.g., CIFAR10, MNIST, CIFAR100): ").upper()
         data_dir = os.path.join("data", dataset_name)
         os.makedirs(data_dir, exist_ok=True)
-        
-        # Check if JSON file exists and is valid
-        json_path = os.path.join(data_dir, f"{dataset_name}.json")
-        if not os.path.exists(json_path):
-            print(f"JSON configuration file not found at {json_path}. Creating one...")
-            # Load the dataset to get the first image
-            dataset = datasets.__dict__[dataset_name](root="data", train=True, download=True)
-            image, _ = dataset[0]
-            image_path = os.path.join(data_dir, "sample_image.png")
-            image.save(image_path)
-            config = create_json_config(dataset_name, data_dir, image_path)
-        else:
-            config = check_and_fix_json(json_path, dataset_name, data_dir, os.path.join(data_dir, "sample_image.png"))
-        
-        # Load dataset
-        dataset = datasets.__dict__[dataset_name](root="data", train=True, download=True, transform=transforms.ToTensor())
+        dataset = setup_dataset(dataset_name)
     elif data_source == "2":
         # Download dataset from URL
         url = input("Enter the URL to download the dataset: ")
         dataset_name = input("Enter a name for the dataset: ")
         data_dir = os.path.join("data", dataset_name)
         download_and_extract(url, data_dir)
-        
+
         # Check if JSON file exists and is valid
         json_path = os.path.join(data_dir, f"{dataset_name}.json")
         if not os.path.exists(json_path):
@@ -106,7 +91,7 @@ def main():
                 break
         else:
             config = check_and_fix_json(json_path, dataset_name, data_dir, os.path.join(data_dir, "sample_image.png"))
-        
+
         # Check if dataset has train/test folders
         train_dir = os.path.join(data_dir, "train")
         test_dir = os.path.join(data_dir, "test")
@@ -126,7 +111,7 @@ def main():
         dataset_name = input("Enter the path to the local dataset folder: ")
         data_dir = dataset_name
         dataset_name = os.path.basename(os.path.normpath(dataset_name))
-        
+
         # Check if JSON file exists and is valid
         json_path = os.path.join(data_dir, f"{dataset_name}.json")
         if not os.path.exists(json_path):
@@ -141,18 +126,18 @@ def main():
                 break
         else:
             config = check_and_fix_json(json_path, dataset_name, data_dir, os.path.join(data_dir, "sample_image.png"))
-        
+
         # Load dataset
         dataset = datasets.ImageFolder(root=data_dir, transform=transforms.ToTensor())
     else:
         raise ValueError("Invalid choice. Please select 1, 2, or 3.")
-    
+
     # Step 2: Train or Predict
     print("\nSelect mode:")
     print("1. Train")
     print("2. Predict")
     mode = input("Enter your choice (1/2): ")
-    
+
     if mode == "1":
         # Train the model
         print("\nTraining the model...")
