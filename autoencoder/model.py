@@ -77,6 +77,81 @@ class Autoencoder(nn.Module):
         x = self.adaptive_upsample(x)
         return x, latent, embedding
 
+class Autoencoder3(nn.Module):
+    def __init__(self, config):
+        super(Autoencoder, self).__init__()
+
+        # Load dataset and model configurations
+        dataset_config = config["dataset"]
+        model_config = config["model"]
+
+        self.input_size = dataset_config["input_size"]
+        self.in_channels = dataset_config["in_channels"]
+        self.latent_dim = model_config["feature_dims"]
+        self.embedding_dim = model_config["autoencoder_config"].get("embedding_dim", 64)
+
+        # Encoder
+        self.encoder = nn.Sequential(
+            nn.Conv2d(self.in_channels, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(0.2),
+
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2),
+
+            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.2),
+
+            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(0.2),
+
+            nn.AdaptiveAvgPool2d((1, 1)),
+        )
+
+        # Latent space and embedding
+        self.encoder_output_size = 512 * 1 * 1
+        self.fc_latent = nn.Linear(self.encoder_output_size, self.latent_dim)
+        self.fc_embedding = nn.Linear(self.latent_dim, self.embedding_dim)
+
+        # Decoder
+        self.decoder_fc = nn.Linear(self.embedding_dim, self.encoder_output_size)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.2),
+
+            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2),
+
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(0.2),
+
+            nn.ConvTranspose2d(64, self.in_channels, kernel_size=4, stride=2, padding=1),
+            nn.Sigmoid()
+        )
+
+        # Adaptive upsampling
+        self.adaptive_upsample = nn.Upsample(size=self.input_size, mode='bilinear', align_corners=False)
+
+    def forward(self, x):
+        # Encoder
+        x = self.encoder(x)
+        x = x.view(x.size(0), -1)
+        latent = self.fc_latent(x)
+        embedding = self.fc_embedding(latent)
+
+        # Decoder
+        x = self.decoder_fc(embedding)
+        x = x.view(x.size(0), 512, 1, 1)
+        x = self.decoder(x)
+        x = self.adaptive_upsample(x)
+        return x, latent, embedding
+
 class Autoencoder2(nn.Module):
     def __init__(self, in_channels, input_size, latent_dim=128, embedding_dim=64):
         super(Autoencoder, self).__init__()
