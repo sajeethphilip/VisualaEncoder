@@ -166,6 +166,22 @@ def setup_dataset(dataset_name):
                 "encoder_type": "autoenc",
                 "feature_dims": 128,
                 "learning_rate": 0.001,
+                "model_selection": {
+                    "simple": {
+                        "enabled": True,
+                        "latent_dim": 128,
+                        "conv_layers": 3,
+                        "use_batch_norm": False
+                    },
+                    "complex": {
+                        "enabled": False,
+                        "latent_dim": 128,
+                        "embedding_dim": 64,
+                        "conv_layers": 4,
+                        "use_batch_norm": True,
+                        "use_adaptive_pooling": True
+                    }
+                },
                 "optimizer": {
                     "type": "Adam",
                     "weight_decay": 0.0001,

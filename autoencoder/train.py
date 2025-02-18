@@ -10,6 +10,22 @@ from autoencoder.data_loader import load_local_dataset, load_dataset_config
 from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv
 
 from tqdm import tqdm
+def get_model(config):
+    """Initialize the appropriate autoencoder model based on config."""
+    model_type = config["model"]["type"]
+    if model_type == "simple_autoencoder":
+        model = SimpleAutoencoder(
+            latent_dim=config["model"]["model_selection"]["simple"]["latent_dim"],
+            conv_layers=config["model"]["model_selection"]["simple"]["conv_layers"],
+            use_batch_norm=config["model"]["model_selection"]["simple"]["use_batch_norm"]
+        )
+    elif model_type == "complex_autoencoder":
+        model = ComplexAutoencoder(
+            config=config["model"]["model_selection"]["complex"]
+        )
+    else:
+        raise ValueError(f"Unknown model type: {model_type}")
+    return model
 
 def train_model(config):
     """Train the autoencoder model using the provided configuration."""
@@ -20,7 +36,8 @@ def train_model(config):
     device = get_device()
 
     # Initialize model
-    model = Autoencoder(config).to(device)
+    #model = Autoencoder(config).to(device)
+    model = get_model(config).to(device)
 
     # Define optimizer with adaptive learning rate parameters
     optimizer_config = config["model"]["optimizer"]
