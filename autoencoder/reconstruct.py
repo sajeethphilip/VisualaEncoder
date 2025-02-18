@@ -30,15 +30,28 @@ def load_model(checkpoint_path, device):
     model.eval()
     return model
 
-def preprocess_image(image_path, device):
-    """Preprocess the input image."""
-    transform = transforms.Compose([
-        transforms.Resize((32, 32)),  # Resize to 32x32
-        transforms.ToTensor(),        # Convert to tensor and normalize to [0, 1]
-    ])
-    image = Image.open(image_path).convert("RGB")
-    image_tensor = transform(image).unsqueeze(0).to(device)  # Add batch dimension
+def preprocess_image(image_path, device, config):
+    """Preprocess the input image according to dataset config."""
+    # Get channel info from config
+    in_channels = config["dataset"]["in_channels"]
+    input_size = tuple(config["dataset"]["input_size"])
+
+    transform_list = [
+        transforms.Resize(input_size),
+        transforms.ToTensor(),
+    ]
+
+    # Add grayscale conversion if needed
+    if in_channels == 1:
+        transform_list.insert(0, transforms.Grayscale(num_output_channels=1))
+
+    transform = transforms.Compose(transform_list)
+
+    # Load and transform image
+    image = Image.open(image_path)
+    image_tensor = transform(image).unsqueeze(0).to(device)
     return image_tensor
+
 
 def enhance_features(latent, embedding, model, enhancement_factor=2.0):
     """
@@ -126,7 +139,7 @@ def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
                 recon_path = os.path.join(recon_dir, file)
 
                 try:
-                    image_tensor = preprocess_image(input_path, device)
+                    image_tensor = preprocess_image(input_path, device,config)
                     with torch.no_grad():
                         # Modified forward pass returns only reconstructed and latent_1d
                         reconstructed, latent_1d = model(image_tensor)
