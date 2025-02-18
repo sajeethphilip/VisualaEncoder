@@ -12,7 +12,7 @@ from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_
 from tqdm import tqdm
 def get_model(config):
     """Initialize the appropriate autoencoder model based on config."""
-    model_type = config["model"]["type"]
+    model_type = config["model"]['model_selection']
     if model_type == "simple_autoencoder":
         model = SimpleAutoencoder(
             latent_dim=config["model"]["model_selection"]["simple"]["latent_dim"],
