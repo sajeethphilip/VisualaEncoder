@@ -372,7 +372,7 @@ def main():
         ) or default_image_path
 
         # Reconstruct the image
-        reconstruct_image(image_path, checkpoint_path, dataset_name)  # Pass dataset_name instead of config
+        reconstruct_image(image_path, checkpoint_path, dataset_name,config)  # Pass dataset_name instead of config
     else:
         raise ValueError("Invalid choice. Please select 1 or 2.")
 
