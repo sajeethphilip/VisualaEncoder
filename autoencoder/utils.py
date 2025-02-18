@@ -37,6 +37,14 @@ import numpy as np
 from PIL import Image
 import shutil
 
+def find_first_image(directory):
+    """Find the first image file in a directory or its subdirectories."""
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp')):
+                return os.path.join(root, file)
+    raise FileNotFoundError(f"No image files found in {directory}")
+
 def extract_and_organize(source_path, dataset_name, is_url=False):
     """Unified function to handle compressed files and organize dataset"""
     data_dir = os.path.join("data", dataset_name)
