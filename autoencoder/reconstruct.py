@@ -1,5 +1,5 @@
 import os
-import tqdm
+from tqdm.auto import tqdm
 import torch
 from torchvision import transforms
 from PIL import Image
