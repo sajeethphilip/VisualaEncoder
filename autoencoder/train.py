@@ -12,20 +12,24 @@ from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_
 from tqdm import tqdm
 def get_model(config):
     """Initialize the appropriate autoencoder model based on config."""
-    model_type = config["model"]['model_selection']
-    if model_type == "simple_autoencoder":
-        model = SimpleAutoencoder(
-            latent_dim=config["model"]["model_selection"]["simple"]["latent_dim"],
-            conv_layers=config["model"]["model_selection"]["simple"]["conv_layers"],
-            use_batch_norm=config["model"]["model_selection"]["simple"]["use_batch_norm"]
-        )
-    elif model_type == "complex_autoencoder":
+    model_selection = config["model"]["model_selection"]
+
+    # Check if complex model is enabled
+    if model_selection["complex"]["enabled"]:
         model = ComplexAutoencoder(
-            config=config["model"]["model_selection"]["complex"]
+            config=model_selection["complex"]
         )
     else:
-        raise ValueError(f"Unknown model type: {model_type}")
+        # Default to simple model
+        model_selection["simple"]["enabled"] = True  # Ensure simple is enabled
+        model = SimpleAutoencoder(
+            latent_dim=model_selection["simple"]["latent_dim"],
+            conv_layers=model_selection["simple"]["conv_layers"],
+            use_batch_norm=model_selection["simple"]["use_batch_norm"]
+        )
+
     return model
+
 
 def train_model(config):
     """Train the autoencoder model using the provided configuration."""
