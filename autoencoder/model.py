@@ -17,6 +17,8 @@ class CosineLatentMapper(nn.Module):
             frequencies.view(high_dim, 1),
             requires_grad=False
         ).to(self.device)
+        # Register frequencies as a buffer instead of Parameter
+        self.register_buffer('frequencies', frequencies)
 
     def _get_first_n_primes(self, n):
         primes = []
