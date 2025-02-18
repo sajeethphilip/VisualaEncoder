@@ -129,6 +129,42 @@ def reconstruct_image(path, checkpoint_path, dataset_name, config):
                 filename=os.path.basename(path)
             )
 
+def reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config):
+    """Reconstruct images from latent CSV files."""
+    device = get_device()
+    model = ModifiedAutoencoder(config, device=device).to(device)
+
+    print(f"Loading model checkpoint from {checkpoint_path}...")
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+
+    # Process single file or directory
+    if os.path.isfile(csv_path):
+        files = [csv_path]
+    else:
+        files = [f for f in os.listdir(csv_path) if f.endswith('_latent.csv')]
+        files = [os.path.join(csv_path, f) for f in files]
+
+    for csv_file in tqdm(files, desc="Reconstructing from latent representations"):
+        try:
+            # Load latent representation
+            latent_1d = load_1d_latent_from_csv(csv_file).to(device)
+
+            # Reconstruct
+            with torch.no_grad():
+                decoded_flat = model.latent_mapper.inverse_map(latent_1d)
+                decoded_volume = decoded_flat.view(1, 512, 1, 1)
+                reconstructed = model.decoder(decoded_volume)
+                reconstructed = model.adaptive_upsample(reconstructed)
+
+            # Save reconstructed image
+            output_name = os.path.basename(csv_file).replace('_latent.csv', '_reconstructed.png')
+            save_reconstructed_image(None, reconstructed, dataset_name, output_name)
+
+        except Exception as e:
+            print(f"Error processing {csv_file}: {str(e)}")
+
 
 def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
     """Reconstruct all images in a directory structure maintaining the hierarchy."""
