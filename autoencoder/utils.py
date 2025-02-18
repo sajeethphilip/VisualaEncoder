@@ -37,6 +37,63 @@ import numpy as np
 from PIL import Image
 import shutil
 
+def extract_and_organize(source_path, dataset_name, is_url=False):
+    """Unified function to handle compressed files and organize dataset"""
+    data_dir = os.path.join("data", dataset_name)
+    temp_dir = os.path.join("temp", dataset_name)
+    os.makedirs(temp_dir, exist_ok=True)
+
+    if is_url:
+        # Download from URL
+        print(f"Downloading from {source_path}...")
+        response = requests.get(source_path, stream=True)
+        filename = os.path.join(temp_dir, source_path.split('/')[-1])
+        with open(filename, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        source_path = filename
+
+    # Extract based on file type
+    if source_path.endswith(('.zip', '.ZIP')):
+        with zipfile.ZipFile(source_path, 'r') as zip_ref:
+            zip_ref.extractall(temp_dir)
+    elif source_path.endswith(('.tar.gz', '.tgz')):
+        with tarfile.open(source_path, 'r:gz') as tar_ref:
+            tar_ref.extractall(temp_dir)
+    elif source_path.endswith('.tar'):
+        with tarfile.open(source_path, 'r:') as tar_ref:
+            tar_ref.extractall(temp_dir)
+
+    # Organize into train/test
+    train_dir = os.path.join(data_dir, "train")
+    test_dir = os.path.join(data_dir, "test")
+    os.makedirs(train_dir, exist_ok=True)
+    os.makedirs(test_dir, exist_ok=True)
+
+    # Move files to appropriate directories
+    for root, _, files in os.walk(temp_dir):
+        for file in files:
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                src_path = os.path.join(root, file)
+                if 'train' in root.lower():
+                    dest_dir = train_dir
+                elif 'test' in root.lower():
+                    dest_dir = test_dir
+                else:
+                    dest_dir = train_dir  # Default to train
+
+                # Create class subdirectories if present
+                class_name = os.path.basename(os.path.dirname(src_path))
+                if class_name != dataset_name:
+                    dest_dir = os.path.join(dest_dir, class_name)
+                    os.makedirs(dest_dir, exist_ok=True)
+
+                shutil.copy2(src_path, os.path.join(dest_dir, file))
+
+    # Cleanup
+    shutil.rmtree(temp_dir)
+    return data_dir
+
 def load_checkpoint(checkpoint_path, model, config):
     """Load checkpoint with device compatibility handling"""
     try:
