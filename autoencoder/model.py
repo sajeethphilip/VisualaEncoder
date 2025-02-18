@@ -9,16 +9,18 @@ class CosineLatentMapper(nn.Module):
         self.high_dim = high_dim
         self.device = device if device is not None else torch.device("cpu")
 
-        # Generate fixed frequency bases for cosine encoding with scaling
-        frequencies = torch.tensor([2*math.pi*prime/high_dim for prime in self._get_first_n_primes(high_dim)])
-        # Normalize frequencies to prevent extreme values
-        frequencies = frequencies / frequencies.max()  # Normalize to [0,1] range
-        self.frequencies = torch.nn.Parameter(
-            frequencies.view(high_dim, 1),
-            requires_grad=False
-        ).to(self.device)
-        # Register frequencies as a buffer instead of Parameter
-        self.register_buffer('frequencies', frequencies)
+        # Check if frequencies buffer already exists
+        if not hasattr(self, 'frequencies'):
+            # Generate fixed frequency bases for cosine encoding with scaling
+            frequencies = torch.tensor([2*math.pi*prime/high_dim for prime in self._get_first_n_primes(high_dim)])
+            # Normalize frequencies to prevent extreme values
+            frequencies = frequencies / frequencies.max()  # Normalize to [0,1] range
+            self.frequencies = torch.nn.Parameter(
+                frequencies.view(high_dim, 1),
+                requires_grad=False
+            ).to(self.device)
+            # Register frequencies as a buffer instead of Parameter
+            self.register_buffer('frequencies', frequencies)
 
     def _get_first_n_primes(self, n):
         primes = []
