@@ -158,6 +158,10 @@ def create_default_json_config(dataset_name, data_dir, image_path):
                 "patience": 5,
                 "min_delta": 0.001
             }
+            "invert_DBNN": True,
+            "reconstruction_weight": 0.5,
+            "feedback_strength": 0.3,
+            "inverse_learning_rate": 0.1,
         },
         "augmentation": {
             "enabled": False,
@@ -338,14 +342,33 @@ def main():
             train_model(config)
         elif mode == "2":
             input_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter path to image or folder to reconstruct: {Style.RESET_ALL}")
-            checkpoint_path = os.path.join(config["training"]["checkpoint_dir"], "best_model.pth")
+            default_checkpoint_path = os.path.join(config["training"]["checkpoint_dir"], "best_model.pth")
 
             if not os.path.exists(checkpoint_path):
                 print(f"{Style.BRIGHT}{Fore.RED}No trained model found. Please train the model first.{Style.RESET_ALL}")
                 return
 
             print(f"\n{Style.BRIGHT}{Fore.CYAN}Reconstructing image(s)...{Style.RESET_ALL}")
-            reconstruct_image(input_path, checkpoint_path, dataset_name, config)
+            if config["training"].get("invert_DBNN", True):
+                # Default CSV path
+                default_csv_path = os.path.join(f"data/{dataset_name}/latent_space")
+                print(f"\nFound latent representations in: {default_csv_path}")
+
+                # Ask user for CSV file path
+                csv_path = input(
+                    f"Enter the path to the latent CSV file/folder (default: {default_csv_path}): "
+                ) or default_csv_path
+
+                # Reconstruct from latent representations
+                reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config)
+            else:
+                # Original image-based reconstruction
+                default_image_path = os.path.join(config["dataset"]["train_dir"])
+                image_path = input(
+                    f"Enter the path to the input image (default: {default_image_path}): "
+                ) or default_image_path
+                reconstruct_image(image_path, checkpoint_path, dataset_name, config)
+
         else:
             print(f"{Style.BRIGHT}{Fore.RED}Invalid mode selected. Exiting...{Style.RESET_ALL}")
 
