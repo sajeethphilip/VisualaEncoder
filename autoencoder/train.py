@@ -93,7 +93,12 @@ def train_model(config):
             current_loss = loss.item()
             epoch_loss += current_loss
             batch_losses.append(current_loss)
-            progress_bar.set_postfix(loss=current_loss, lr=current_lr)
+            progress_bar.set_postfix({
+                'loss': current_loss,
+                'lr': current_lr,
+                '[recon]': loss_recon.item(),
+                '[feature]': loss_feature.item()
+            })
 
         # Calculate average epoch loss
         epoch_loss /= len(train_loader)
