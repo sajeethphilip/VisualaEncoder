@@ -165,7 +165,7 @@ def setup_dataset(dataset_name):
             "model": {
                 "encoder_type": "autoenc",
                 "feature_dims": 128,
-                "learning_rate": 0.001,
+                "learning_rate": 0.1,
                 "optimizer": {
                     "type": "Adam",
                     "weight_decay": 0.0001,
