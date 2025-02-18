@@ -311,7 +311,7 @@ def main():
                         break
                 break
         else:
-            config = check_and_fix_json(json_path, dataset_name, data_dir, os.path.join(data_dir, "sample_image.png"))
+            config = check_and_fix_json(json_path, dataset_name, data_dir, data_dir)
 
         # Check if dataset has train/test folders
         train_dir = os.path.join(data_dir, "train")
