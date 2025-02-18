@@ -6,7 +6,7 @@ from PIL import Image
 from autoencoder.train import train_model
 from autoencoder.reconstruct import reconstruct_image
 from autoencoder.data_loader import load_local_dataset, load_dataset_config
-from autoencoder.utils import download_and_extract, setup_dataset
+from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize
 
 def create_default_json_config(dataset_name, data_dir, image_path):
     """Create a default JSON configuration file interactively."""
@@ -272,132 +272,86 @@ def check_and_fix_json(json_path, dataset_name, data_dir, image_path):
 
 def main():
     """Main function for user interaction."""
-    print("Welcome to the Autoencoder Tool!")
+    # Clear screen
+    os.system('cls' if os.name == 'nt' else 'clear')
 
-    # Step 1: Select data source
-    print("\nSelect data source:")
-    print("1. Torchvision dataset (e.g., CIFAR10, MNIST)")
-    print("2. URL to download dataset")
-    print("3. Local file")
-    data_source = input("Enter your choice (1/2/3): ")
+    # Initialize colorama
+    from colorama import init, Fore, Back, Style
+    init()
 
-    config = None  # Initialize config variable
-    dataset_name = None  # Initialize dataset_name variable
+    # Header and branding
+    print(f"\n{Style.BRIGHT}{Fore.CYAN}{'='*80}{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.YELLOW}{'Visual Autoencoder Tool':^80}{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.CYAN}{'='*80}{Style.RESET_ALL}\n")
 
-    if data_source == "1":
-        # Load torchvision dataset
-        dataset_name = input("Enter dataset name (e.g., CIFAR10, MNIST, CIFAR100): ").upper()
-        data_dir = os.path.join("data", dataset_name)
-        os.makedirs(data_dir, exist_ok=True)
-        config = setup_dataset(dataset_name)
+    # Author and License information
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'Author: ':>30}{Fore.YELLOW}Ninan Sajeeth Philip{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.LIGHTGREEN_EX}{'Organisation: ':>30}Artificial Intelligence Research and Intelligent Systems{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.LIGHTGREEN_EX}{'':>30}Thelliyoor -689544 India{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.BLUE}{'License: ':>30}Creative Commons License{Style.RESET_ALL}\n")
 
-    elif data_source == "2":
-        # Download dataset from URL
-        url = input("Enter the URL to download the dataset: ")
-        dataset_name = input("Enter a name for the dataset: ")
-        data_dir = os.path.join("data", dataset_name)
-        download_and_extract(url, data_dir)
+    # Data source selection menu
+    print(f"{Style.BRIGHT}{Fore.CYAN}{'Select data source:':^80}{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'1. ':>35}{Fore.YELLOW}Torchvision dataset (e.g., CIFAR10, MNIST){Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'2. ':>35}{Fore.YELLOW}URL to download dataset{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'3. ':>35}{Fore.YELLOW}Local file/folder{Style.RESET_ALL}\n")
 
-        # Check if JSON file exists and is valid
-        json_path = os.path.join(data_dir, f"{dataset_name}.json")
-        if not os.path.exists(json_path):
-            print(f"JSON configuration file not found at {json_path}. Creating one...")
-            # Find the first image in the dataset
-            for root, _, files in os.walk(data_dir):
-                for file in files:
-                    if file.endswith((".png", ".jpg", ".jpeg")):
-                        image_path = os.path.join(root, file)
-                        config = create_default_json_config(dataset_name, data_dir, image_path)
-                        break
-                break
-        else:
-            config = check_and_fix_json(json_path, dataset_name, data_dir, data_dir)
+    data_source = input(f"{Style.BRIGHT}{Fore.WHITE}Enter your choice (1/2/3): {Style.RESET_ALL}")
 
-        # Check if dataset has train/test folders
-        train_dir = os.path.join(data_dir, "train")
-        test_dir = os.path.join(data_dir, "test")
-        if os.path.exists(train_dir) and os.path.exists(test_dir):
-            combine = input("Dataset has train and test folders. Combine them? (y/n): ").lower()
-            if combine == "y":
-                # Combine train and test folders
-                dataset = datasets.ImageFolder(root=data_dir, transform=transforms.ToTensor())
+    try:
+        if data_source == "1":
+            dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter dataset name (e.g., CIFAR10, MNIST): {Style.RESET_ALL}").upper()
+            config = setup_dataset(dataset_name)
+
+        elif data_source == "2":
+            url = input(f"{Style.BRIGHT}{Fore.WHITE}Enter the URL to download the dataset: {Style.RESET_ALL}")
+            dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
+            data_dir = extract_and_organize(url, dataset_name, is_url=True)
+            first_image = find_first_image(data_dir)
+            config = create_default_json_config(dataset_name, data_dir, first_image)
+
+        elif data_source == "3":
+            source_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter the path to the local file/folder: {Style.RESET_ALL}")
+            dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
+
+            if os.path.isfile(source_path) and source_path.endswith(('.zip', '.tar.gz', '.tgz', '.tar')):
+                data_dir = extract_and_organize(source_path, dataset_name)
             else:
-                # Use only the train folder
-                dataset = datasets.ImageFolder(root=train_dir, transform=transforms.ToTensor())
+                data_dir = source_path
+
+            first_image = find_first_image(data_dir)
+            config = create_default_json_config(dataset_name, data_dir, first_image)
+
         else:
-            # Use the entire dataset
-            dataset = datasets.ImageFolder(root=data_dir, transform=transforms.ToTensor())
+            print(f"{Style.BRIGHT}{Fore.RED}Invalid choice. Exiting...{Style.RESET_ALL}")
+            return
 
-    elif data_source == "3":
-        # Load local file
-        dataset_name = input("Enter the path to the local dataset folder: ")
-        data_dir = dataset_name
-        dataset_name = os.path.basename(os.path.normpath(dataset_name))
+        # Mode selection
+        print(f"\n{Style.BRIGHT}{Fore.CYAN}{'Select mode:':^80}{Style.RESET_ALL}")
+        print(f"{Style.BRIGHT}{Fore.WHITE}{'1. ':>35}{Fore.YELLOW}Train{Style.RESET_ALL}")
+        print(f"{Style.BRIGHT}{Fore.WHITE}{'2. ':>35}{Fore.YELLOW}Predict{Style.RESET_ALL}")
 
-        # Check if JSON file exists and is valid
-        json_path = os.path.join(data_dir, f"{dataset_name}.json")
-        if not os.path.exists(json_path):
-            print(f"JSON configuration file not found at {json_path}. Creating one...")
-            # Find the first image in the dataset
-            for root, _, files in os.walk(data_dir):
-                for file in files:
-                    if file.endswith((".png", ".jpg", ".jpeg")):
-                        image_path = os.path.join(root, file)
-                        config = create_default_json_config(dataset_name, data_dir, image_path)
-                        break
-                break
+        mode = input(f"{Style.BRIGHT}{Fore.WHITE}Enter your choice (1/2): {Style.RESET_ALL}")
+
+        if mode == "1":
+            print(f"\n{Style.BRIGHT}{Fore.CYAN}Training the model...{Style.RESET_ALL}")
+            train_model(config)
+        elif mode == "2":
+            input_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter path to image or folder to reconstruct: {Style.RESET_ALL}")
+            checkpoint_path = os.path.join(config["training"]["checkpoint_dir"], "best_model.pth")
+
+            if not os.path.exists(checkpoint_path):
+                print(f"{Style.BRIGHT}{Fore.RED}No trained model found. Please train the model first.{Style.RESET_ALL}")
+                return
+
+            print(f"\n{Style.BRIGHT}{Fore.CYAN}Reconstructing image(s)...{Style.RESET_ALL}")
+            reconstruct_image(input_path, checkpoint_path, dataset_name, config)
         else:
-            config = check_and_fix_json(json_path, dataset_name, data_dir, data_dir)
+            print(f"{Style.BRIGHT}{Fore.RED}Invalid mode selected. Exiting...{Style.RESET_ALL}")
 
-        # Load dataset
-        dataset = datasets.ImageFolder(root=data_dir, transform=transforms.ToTensor())
-
-    else:
-        raise ValueError("Invalid choice. Please select 1, 2, or 3.")
-
-    # Ensure config is loaded
-    if config is None:
-        raise ValueError("Configuration not loaded. Please check the dataset path and JSON file.")
-
-    # Debug: Print the config to verify its contents
-    print("\nConfiguration loaded:")
-    print(json.dumps(config, indent=4))
-
-    # Validate the configuration
-    validate_config(config)
-
-    # Step 2: Train or Predict
-    print("\nSelect mode:")
-    print("1. Train")
-    print("2. Predict")
-    mode = input("Enter your choice (1/2): ")
-
-    if mode == "1":
-        # Train the model
-        print("\nTraining the model...")
-        train_model(config)  # Pass the configuration
-    elif mode == "2":
-        # Predict (reconstruct images)
-        print("\nReconstructing images...")
-
-        # Default values for reconstruction
-        default_checkpoint_path = os.path.join(config["training"]["checkpoint_dir"], "best_model.pth")
-        default_image_path = os.path.join(config["dataset"]["train_dir"])
-
-        # Prompt user for checkpoint path (with default)
-        checkpoint_path = input(
-            f"Enter the path to the trained model checkpoint (default: {default_checkpoint_path}): "
-        ) or default_checkpoint_path
-
-        # Prompt user for image path (with default)
-        image_path = input(
-            f"Enter the path to the input image (default: {default_image_path}): "
-        ) or default_image_path
-
-        # Reconstruct the image
-        reconstruct_image(image_path, checkpoint_path, dataset_name,config)  # Pass dataset_name instead of config
-    else:
-        raise ValueError("Invalid choice. Please select 1 or 2.")
+    except Exception as e:
+        print(f"{Style.BRIGHT}{Fore.RED}Error: {str(e)}{Style.RESET_ALL}")
+        raise
 
 if __name__ == "__main__":
     main()
