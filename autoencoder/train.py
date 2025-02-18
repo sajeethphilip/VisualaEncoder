@@ -56,7 +56,7 @@ def train_model(config):
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        start_epoch = checkpoint["epoch"]
+        start_epoch = 0 #checkpoint["epoch"]
         best_loss = checkpoint["loss"]
     else:
         start_epoch = 0
