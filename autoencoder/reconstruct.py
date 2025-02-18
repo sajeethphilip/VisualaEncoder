@@ -67,12 +67,7 @@ def reconstruct_image(image_path, checkpoint_path, dataset_name, enhancement_fac
     config = load_dataset_config(dataset_name)
 
     # Initialize model
-    model = Autoencoder(
-        in_channels=config["in_channels"],
-        input_size=config["input_size"],
-        latent_dim=128,
-        embedding_dim=64
-    ).to(device)
+    model = Autoencoder(config).to(device)
 
     # Load checkpoint
     print(f"Loading model checkpoint from {checkpoint_path}...")
