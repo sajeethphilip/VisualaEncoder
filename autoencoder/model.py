@@ -8,15 +8,24 @@ class CosineLatentMapper(nn.Module):
         super(CosineLatentMapper, self).__init__()
         self.high_dim = high_dim
         self.device = device if device is not None else torch.device("cpu")
+        self._initialize_frequencies()
 
-        # Generate fixed frequency bases for cosine encoding with scaling
-        if not hasattr(self, 'frequencies'):
-            frequencies = torch.tensor([2*math.pi*prime/high_dim for prime in self._get_first_n_primes(high_dim)])
-            # Normalize frequencies to prevent extreme values
-            frequencies = frequencies / frequencies.max()  # Normalize to [0,1] range
+    def _initialize_frequencies(self):
+        """Initialize or reinitialize frequencies"""
+        frequencies = torch.tensor([2*math.pi*prime/self.high_dim for prime in self._get_first_n_primes(self.high_dim)])
+        frequencies = frequencies / frequencies.max()  # Normalize to [0,1] range
+        self.register_buffer('frequencies', frequencies.view(self.high_dim, 1))
 
-            # Use register_buffer instead of Parameter for frequencies
-            self.register_buffer('frequencies', frequencies.view(high_dim, 1))
+    def load_state_dict(self, state_dict, strict=False):
+        """Override load_state_dict to handle missing frequencies"""
+        if 'frequencies' not in state_dict:
+            print("Frequencies not found in state dict. Initializing new frequencies...")
+            self._initialize_frequencies()
+            # Remove frequencies requirement from state_dict check
+            super().load_state_dict(state_dict, strict=False)
+        else:
+            super().load_state_dict(state_dict, strict=strict)
+
 
     def _get_first_n_primes(self, n):
         primes = []

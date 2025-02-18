@@ -51,14 +51,14 @@ def train_model(config):
         try:
             print(f"Loading existing checkpoint from {checkpoint_path}")
             checkpoint = torch.load(checkpoint_path, map_location=device)
-            model.load_state_dict(checkpoint["model_state_dict"])
-            start_epoch = 0 # checkpoint["epoch"]
+            # Load with strict=False to allow missing frequencies
+            model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+            start_epoch = checkpoint["epoch"]
             best_loss = checkpoint["loss"]
             print(f"Resuming from epoch {start_epoch} with best loss: {best_loss:.4f}")
         except Exception as e:
             print(f"Error loading checkpoint: {e}")
             print("Starting fresh training...")
-
     # Define optimizer
     optimizer_config = config["model"]["optimizer"]
     initial_lr = config["model"]["learning_rate"]
