@@ -74,12 +74,36 @@ def save_reconstructed_image(image_tensor, dataset_name, filename="reconstructed
     image.save(image_path)
     print(f"Reconstructed image saved to {image_path}")
 
+def reconstruct_image(path, checkpoint_path, dataset_name, config):
+    """Handle both single image and folder reconstruction."""
+    if os.path.isdir(path):
+        print(f"Processing directory: {path}")
+        reconstruct_folder(path, checkpoint_path, dataset_name, config)
+    else:
+        print(f"Processing single image: {path}")
+        device = get_device()
+
+        # Use ModifiedAutoencoder instead of Autoencoder
+        model = ModifiedAutoencoder(config, device=device).to(device)
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.eval()
+
+        image_tensor = preprocess_image(path, device)
+
+        with torch.no_grad():
+            # Modified forward pass returns only reconstructed and latent_1d
+            reconstructed, latent_1d = model(image_tensor)
+            save_reconstructed_image(reconstructed, dataset_name,
+                                  filename=os.path.basename(path))
+
 def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
     """Reconstruct all images in a directory structure maintaining the hierarchy."""
     device = get_device()
-    model = Autoencoder(config).to(device)
 
-    # Load checkpoint
+    # Use ModifiedAutoencoder instead of Autoencoder
+    model = ModifiedAutoencoder(config, device=device).to(device)
+
     print(f"Loading model checkpoint from {checkpoint_path}...")
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
@@ -89,60 +113,30 @@ def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
     recon_base_dir = f"data/{dataset_name}/reconstructed_images"
     os.makedirs(recon_base_dir, exist_ok=True)
 
-    # Walk through the input directory
     for root, dirs, files in os.walk(input_dir):
-        # Create corresponding subdirectory in reconstruction folder
         relative_path = os.path.relpath(root, input_dir)
         recon_dir = os.path.join(recon_base_dir, relative_path)
         os.makedirs(recon_dir, exist_ok=True)
 
         print(f"Processing directory: {relative_path}")
 
-        # Process each image in the current directory
         for file in tqdm(files):
             if file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                # Construct paths
                 input_path = os.path.join(root, file)
                 recon_path = os.path.join(recon_dir, file)
 
-                # Process image
                 try:
-                    # Preprocess and reconstruct
                     image_tensor = preprocess_image(input_path, device)
                     with torch.no_grad():
-                        _, latent, embeddings = model(image_tensor)
-                        enhanced_image = enhance_features(latent, embeddings, model)
+                        # Modified forward pass returns only reconstructed and latent_1d
+                        reconstructed, latent_1d = model(image_tensor)
 
                     # Save reconstructed image
-                    image = transforms.ToPILImage()(enhanced_image.squeeze(0).cpu())
+                    image = transforms.ToPILImage()(reconstructed.squeeze(0).cpu())
                     image.save(recon_path)
                 except Exception as e:
                     print(f"Error processing {input_path}: {str(e)}")
 
-    print(f"Reconstruction complete. Results saved in {recon_base_dir}")
-
-# Modify the main reconstruction function to handle both single files and folders
-def reconstruct_image(path, checkpoint_path, dataset_name, config):
-    """Handle both single image and folder reconstruction."""
-    if os.path.isdir(path):
-        print(f"Processing directory: {path}")
-        reconstruct_folder(path, checkpoint_path, dataset_name, config)
-    else:
-        print(f"Processing single image: {path}")
-        # Original single image reconstruction code
-        device = get_device()
-        model = Autoencoder(config).to(device)
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-        model.load_state_dict(checkpoint["model_state_dict"])
-        model.eval()
-
-        image_tensor = preprocess_image(path, device)
-        with torch.no_grad():
-            _, latent, embeddings = model(image_tensor)
-            enhanced_image = enhance_features(latent, embeddings, model)
-
-        save_reconstructed_image(enhanced_image, dataset_name,
-                               filename=os.path.basename(path))
 
 
 # Example usage
