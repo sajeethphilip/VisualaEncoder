@@ -4,7 +4,7 @@ import torch
 from torchvision import datasets, transforms
 from PIL import Image
 from autoencoder.train import train_model
-from autoencoder.reconstruct import reconstruct_image
+from autoencoder.reconstruct import reconstruct_image,reconstruct_from_latent
 from autoencoder.data_loader import load_local_dataset, load_dataset_config
 from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize,find_first_image
 
@@ -157,7 +157,7 @@ def create_default_json_config(dataset_name, data_dir, image_path):
             "early_stopping": {
                 "patience": 5,
                 "min_delta": 0.001
-            }
+            },
             "invert_DBNN": True,
             "reconstruction_weight": 0.5,
             "feedback_strength": 0.3,
@@ -341,8 +341,7 @@ def main():
             print(f"\n{Style.BRIGHT}{Fore.CYAN}Training the model...{Style.RESET_ALL}")
             train_model(config)
         elif mode == "2":
-            input_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter path to image or folder to reconstruct: {Style.RESET_ALL}")
-            default_checkpoint_path = os.path.join(config["training"]["checkpoint_dir"], "best_model.pth")
+            checkpoint_path = os.path.join(config["training"]["checkpoint_dir"], "best_model.pth")
 
             if not os.path.exists(checkpoint_path):
                 print(f"{Style.BRIGHT}{Fore.RED}No trained model found. Please train the model first.{Style.RESET_ALL}")
@@ -362,6 +361,7 @@ def main():
                 # Reconstruct from latent representations
                 reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config)
             else:
+                input_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter path to image or folder to reconstruct: {Style.RESET_ALL}")
                 # Original image-based reconstruction
                 default_image_path = os.path.join(config["dataset"]["train_dir"])
                 image_path = input(
