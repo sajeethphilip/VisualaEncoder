@@ -77,8 +77,8 @@ def train_model(config):
                         image_name = f"image_{idx}"
                         save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"])
 
-                # Compute reconstruction loss
-                loss = criterion_recon(reconstructed, images)
+            # Compute reconstruction loss
+            loss = criterion_recon(reconstructed, images)
 
             # Backward pass
             optimizer.zero_grad()
