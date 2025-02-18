@@ -3,7 +3,7 @@ from tqdm.auto import tqdm
 import torch
 from torchvision import transforms
 from PIL import Image
-from autoencoder.model import Autoencoder
+from autoencoder.model import ModifiedAutoencoder
 from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv
 from autoencoder.data_loader import load_dataset_config
 
