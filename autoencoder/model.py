@@ -24,16 +24,16 @@ class CosineLatentMapper(nn.Module):
         return primes
 
     def forward_map(self, x):
-        angles = torch.matmul(x, self.frequencies)
-        return torch.clamp(torch.cos(angles), -0.99, 0.99)
+        # Move frequencies to the same device as input
+        self.frequencies = self.frequencies.to(x.device)
+        angles = torch.matmul(x, self.frequencies)  # (batch_size, 1)
+        return torch.cos(angles)
 
     def inverse_map(self, y):
-        # y shape: (batch_size, 1)
-        # Recover original space using inverse cosine
+        # Move frequencies to the same device as input
+        self.frequencies = self.frequencies.to(y.device)
         angles = torch.arccos(y)  # (batch_size, 1)
-        # Reshape frequencies for broadcasting: (1, high_dim)
         freq_reshaped = self.frequencies.t()
-        # Broadcast multiply: (batch_size, 1) * (1, high_dim) -> (batch_size, high_dim)
         return angles * freq_reshaped
 
 
