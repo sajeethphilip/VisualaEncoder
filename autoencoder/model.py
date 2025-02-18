@@ -9,18 +9,14 @@ class CosineLatentMapper(nn.Module):
         self.high_dim = high_dim
         self.device = device if device is not None else torch.device("cpu")
 
-        # Check if frequencies buffer already exists
+        # Generate fixed frequency bases for cosine encoding with scaling
         if not hasattr(self, 'frequencies'):
-            # Generate fixed frequency bases for cosine encoding with scaling
             frequencies = torch.tensor([2*math.pi*prime/high_dim for prime in self._get_first_n_primes(high_dim)])
             # Normalize frequencies to prevent extreme values
             frequencies = frequencies / frequencies.max()  # Normalize to [0,1] range
-            self.frequencies = torch.nn.Parameter(
-                frequencies.view(high_dim, 1),
-                requires_grad=False
-            ).to(self.device)
-            # Register frequencies as a buffer instead of Parameter
-            self.register_buffer('frequencies', frequencies)
+
+            # Use register_buffer instead of Parameter for frequencies
+            self.register_buffer('frequencies', frequencies.view(high_dim, 1))
 
     def _get_first_n_primes(self, n):
         primes = []
@@ -32,7 +28,6 @@ class CosineLatentMapper(nn.Module):
         return primes
 
     def forward_map(self, x):
-        self.frequencies = self.frequencies.to(x.device)
         # Normalize input
         x = torch.tanh(x)  # Bound input to [-1,1]
         angles = torch.matmul(x, self.frequencies)
@@ -40,13 +35,13 @@ class CosineLatentMapper(nn.Module):
         return torch.clamp(torch.cos(angles), -0.99, 0.99)
 
     def inverse_map(self, y):
-        self.frequencies = self.frequencies.to(y.device)
         # Ensure y is in valid range for arccos
         y = torch.clamp(y, -0.99, 0.99)
         angles = torch.arccos(y)
         freq_reshaped = self.frequencies.t()
         # Scale output to prevent explosion
         return torch.tanh(angles * freq_reshaped)
+
 
 
 
