@@ -58,13 +58,13 @@ def save_reconstructed_image(image_tensor, dataset_name, filename="reconstructed
     image.save(image_path)
     print(f"Reconstructed image saved to {image_path}")
 
-def reconstruct_image(image_path, checkpoint_path, dataset_name, enhancement_factor=2.0):
+def reconstruct_image(image_path, checkpoint_path, dataset_name, config, enhancement_factor=2.0):
     """Reconstruct an image with enhanced features."""
     # Detect device
     device = get_device()
 
     # Load dataset configuration
-    config = load_dataset_config(dataset_name)
+    #config = load_dataset_config(dataset_name)
 
     # Initialize model
     model = Autoencoder(config).to(device)
