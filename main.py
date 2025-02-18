@@ -41,6 +41,22 @@ def create_default_json_config(dataset_name, data_dir, image_path):
             "encoder_type": "autoenc",
             "feature_dims": latent_dim,
             "learning_rate": learning_rate,
+             "model_selection": {
+                "simple": {
+                    "enabled": True,
+                    "latent_dim": 128,
+                    "conv_layers": 3,
+                    "use_batch_norm": False
+                },
+                "complex": {
+                    "enabled": False,
+                    "latent_dim": 128,
+                    "embedding_dim": 64,
+                    "conv_layers": 4,
+                    "use_batch_norm": True,
+                    "use_adaptive_pooling": True
+                }
+            },
             "optimizer": {
                 "type": "Adam",
                 "weight_decay": 0.0001,
@@ -347,7 +363,7 @@ def main():
                         break
                 break
         else:
-            config = check_and_fix_json(json_path, dataset_name, data_dir, os.path.join(data_dir, "sample_image.png"))
+            config = check_and_fix_json(json_path, dataset_name, data_dir, data_dir)
 
         # Load dataset
         dataset = datasets.ImageFolder(root=data_dir, transform=transforms.ToTensor())
@@ -382,7 +398,7 @@ def main():
 
         # Default values for reconstruction
         default_checkpoint_path = os.path.join(config["training"]["checkpoint_dir"], "best_model.pth")
-        default_image_path = os.path.join(config["dataset"]["train_dir"], "sample_image.png")
+        default_image_path = os.path.join(config["dataset"]["train_dir"])
 
         # Prompt user for checkpoint path (with default)
         checkpoint_path = input(
