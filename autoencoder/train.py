@@ -52,7 +52,7 @@ def train_model(config):
             print(f"Loading existing checkpoint from {checkpoint_path}")
             checkpoint = torch.load(checkpoint_path, map_location=device)
             model.load_state_dict(checkpoint["model_state_dict"])
-            start_epoch = checkpoint["epoch"]
+            start_epoch = 0 # checkpoint["epoch"]
             best_loss = checkpoint["loss"]
             print(f"Resuming from epoch {start_epoch} with best loss: {best_loss:.4f}")
         except Exception as e:
