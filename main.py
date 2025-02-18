@@ -6,7 +6,7 @@ from PIL import Image
 from autoencoder.train import train_model
 from autoencoder.reconstruct import reconstruct_image
 from autoencoder.data_loader import load_local_dataset, load_dataset_config
-from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize
+from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize,find_first_image
 
 def create_default_json_config(dataset_name, data_dir, image_path):
     """Create a default JSON configuration file interactively."""
