@@ -40,8 +40,8 @@ def train_model(config):
     device = get_device()
 
     # Initialize model
-    #model = Autoencoder(config).to(device)
-    model = get_model(config).to(device)
+    model = Autoencoder(config).to(device)
+    #model = get_model(config).to(device)
 
     # Define optimizer with adaptive learning rate parameters
     optimizer_config = config["model"]["optimizer"]
