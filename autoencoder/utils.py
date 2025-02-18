@@ -37,6 +37,25 @@ import numpy as np
 from PIL import Image
 import shutil
 
+def save_1d_latent_to_csv(latent_1d, image_name, dataset_name):
+    """Save 1D latent representation to CSV"""
+    data_dir = f"data/{dataset_name}/latent_space"
+    os.makedirs(data_dir, exist_ok=True)
+
+    csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
+    with open(csv_path, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(latent_1d.cpu().numpy().flatten())
+    return csv_path
+
+def load_1d_latent_from_csv(csv_path):
+    """Load 1D latent representation from CSV"""
+    with open(csv_path, "r") as csvfile:
+        reader = csv.reader(csvfile)
+        latent_data = next(reader)  # Read first row
+        latent_1d = torch.tensor([float(x) for x in latent_data])
+    return latent_1d.unsqueeze(0)  # Add batch dimension
+
 def setup_dataset(dataset_name):
     """Set up a torchvision dataset and return a full configuration."""
     # Convert dataset name to uppercase for torchvision

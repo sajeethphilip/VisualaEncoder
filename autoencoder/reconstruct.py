@@ -7,6 +7,21 @@ from autoencoder.model import Autoencoder
 from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv
 from autoencoder.data_loader import load_dataset_config
 
+def reconstruct_from_latent(model, latent_csv_path, device):
+    """Reconstruct image from saved latent representation"""
+    # Load latent representation
+    latent_1d = load_1d_latent_from_csv(latent_csv_path).to(device)
+
+    # Reconstruct through decoder
+    with torch.no_grad():
+        decoded_flat = model.latent_mapper.inverse_map(latent_1d)
+        decoded_volume = decoded_flat.view(1, 512, 1, 1)
+        reconstructed = model.decoder(decoded_volume)
+        reconstructed = model.adaptive_upsample(reconstructed)
+
+    return reconstructed
+
+
 def load_model(checkpoint_path, device):
     """Load the trained autoencoder model."""
     model = Autoencoder(latent_dim=128, embedding_dim=64).to(device)
