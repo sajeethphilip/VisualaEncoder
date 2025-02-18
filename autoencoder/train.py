@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from autoencoder.model import ModifiedAutoencoder
 from autoencoder.data_loader import load_local_dataset
-from autoencoder.utils import get_device
+from autoencoder.utils import get_device, save_1d_latent_to_csv
 
 def train_model(config):
     """Train the autoencoder model using the provided configuration."""
