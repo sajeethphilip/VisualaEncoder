@@ -75,18 +75,22 @@ def reconstruct_image(image_path, checkpoint_path, dataset_name, enhancement_fac
     ).to(device)
 
     # Load checkpoint
+    print(f"Loading model checkpoint from {checkpoint_path}...")
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
 
     # Preprocess the input image
+    print("Preprocessing input image...")
     image_tensor = preprocess_image(image_path, device)
 
     # Generate latent space and embeddings
+    print("Reconstructing image...")
     with torch.no_grad():
         _, latent, embeddings = model(image_tensor)
 
     # Enhance decisive features and reconstruct the image
+    print("Enhancing features...")
     enhanced_image = enhance_features(latent, embeddings, model, enhancement_factor)
 
     # Save the reconstructed image

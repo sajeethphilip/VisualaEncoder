@@ -9,13 +9,15 @@ from autoencoder.model import Autoencoder
 from autoencoder.data_loader import load_local_dataset, load_dataset_config
 from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv
 
+from tqdm import tqdm
+
 def train_model(config):
     """Train the autoencoder model using the provided configuration."""
     # Load dataset
     dataset_config = config["dataset"]
     train_dataset = load_local_dataset(dataset_config["name"])
     train_loader = DataLoader(train_dataset, batch_size=config["training"]["batch_size"], shuffle=True)
-    device=get_device()
+
     # Initialize model
     model = Autoencoder(config).to(device)
 
@@ -45,10 +47,28 @@ def train_model(config):
     criterion_recon = nn.MSELoss()
     criterion_feature = nn.MSELoss()
 
+    # Check if a previous checkpoint exists
+    checkpoint_dir = config["training"]["checkpoint_dir"]
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    checkpoint_path = os.path.join(checkpoint_dir, "best_model.pth")
+    if os.path.exists(checkpoint_path):
+        print(f"Loading previous model checkpoint from {checkpoint_path}...")
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        start_epoch = checkpoint["epoch"]
+        best_loss = checkpoint["loss"]
+    else:
+        start_epoch = 0
+        best_loss = float("inf")
+
     # Training loop
-    for epoch in range(config["training"]["epochs"]):
+    for epoch in range(start_epoch, config["training"]["epochs"]):
         model.train()
-        for batch in train_loader:
+        epoch_loss = 0.0
+        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{config['training']['epochs']}", leave=False)
+
+        for batch in progress_bar:
             images, _ = batch
             images = images.to(device)
 
@@ -65,24 +85,30 @@ def train_model(config):
             loss.backward()
             optimizer.step()
 
+            # Update progress bar
+            epoch_loss += loss.item()
+            progress_bar.set_postfix(loss=loss.item())
+
+        # Calculate average epoch loss
+        epoch_loss /= len(train_loader)
+        print(f"Epoch [{epoch + 1}/{config['training']['epochs']}], Loss: {epoch_loss:.4f}")
+
         # Update scheduler
-        scheduler.step(loss)
+        scheduler.step(epoch_loss)
 
-        # Log metrics
-        print(f"Epoch [{epoch+1}/{config['training']['epochs']}], Loss: {loss.item():.4f}")
+        # Save model checkpoint if it's the best so far
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+            torch.save({
+                "epoch": epoch + 1,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "loss": best_loss,
+                "config": config
+            }, checkpoint_path)
+            print(f"Saved best model checkpoint to {checkpoint_path}")
 
-    # Save model checkpoint
-    checkpoint_dir = config["training"]["checkpoint_dir"]
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    checkpoint_path = os.path.join(checkpoint_dir, "best_model.pth")
-    torch.save({
-        "epoch": epoch + 1,
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "loss": loss.item(),
-        "config": config
-    }, checkpoint_path)
-    print(f"Saved best model to {checkpoint_path}")
+    print("Training complete.")
 
 def train_model1(dataset_name):
     """Train the autoencoder model."""
