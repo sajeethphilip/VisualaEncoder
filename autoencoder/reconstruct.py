@@ -63,18 +63,19 @@ def reconstruct_image(image_path, checkpoint_path, dataset_name, enhancement_fac
     # Detect device
     device = get_device()
 
+    # Load dataset configuration
     config = load_dataset_config(dataset_name)
 
     # Initialize model
     model = Autoencoder(
-        in_channels=config["in_channels"],
-        input_size=config["input_size"],
+        in_channels=config["dataset"]["in_channels"],
+        input_size=config["dataset"]["input_size"],
         latent_dim=128,
         embedding_dim=64
-    ).to(get_device())
+    ).to(device)
 
     # Load checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location=get_device())
+    checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
 
