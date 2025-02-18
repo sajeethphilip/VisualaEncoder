@@ -235,17 +235,40 @@ def validate_config(config):
     print("Configuration is valid.")
 
 def check_and_fix_json(json_path, dataset_name, data_dir, image_path):
-    """Check if the JSON file is valid; if not, replace it with a default."""
+    """Check if JSON file exists and is valid; only add missing features or create if damaged/missing."""
     try:
+        # Try to load existing config
         with open(json_path, "r") as f:
-            config = json.load(f)
-        # Validate the JSON structure
-        if "dataset" not in config:
-            raise ValueError("Invalid JSON structure.")
-        return config
-    except (json.JSONDecodeError, ValueError, FileNotFoundError):
-        print(f"Invalid or corrupted JSON file at {json_path}. Replacing with default...")
+            existing_config = json.load(f)
+
+        # Get default config for comparison
+        default_config = create_default_json_config(dataset_name, data_dir, image_path)
+
+        # Recursively update missing keys while preserving existing values
+        def update_missing(existing, default):
+            for key, value in default.items():
+                if key not in existing:
+                    existing[key] = value
+                elif isinstance(value, dict) and isinstance(existing[key], dict):
+                    update_missing(existing[key], value)
+            return existing
+
+        # Update only missing features
+        updated_config = update_missing(existing_config, default_config)
+
+        # Save only if changes were made
+        if updated_config != existing_config:
+            print(f"Adding missing configuration parameters to {json_path}")
+            with open(json_path, "w") as f:
+                json.dump(updated_config, f, indent=4)
+
+        return updated_config
+
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Config file is missing or corrupted: {str(e)}")
+        print(f"Creating new configuration file at {json_path}")
         return create_default_json_config(dataset_name, data_dir, image_path)
+
 
 def main():
     """Main function for user interaction."""
