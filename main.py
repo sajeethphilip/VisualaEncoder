@@ -259,28 +259,14 @@ def main():
     data_source = input("Enter your choice (1/2/3): ")
 
     config = None  # Initialize config variable
+    dataset_name = None  # Initialize dataset_name variable
 
     if data_source == "1":
         # Load torchvision dataset
         dataset_name = input("Enter dataset name (e.g., CIFAR10, MNIST, CIFAR100): ").upper()
         data_dir = os.path.join("data", dataset_name)
         os.makedirs(data_dir, exist_ok=True)
-        dataset = setup_dataset(dataset_name)
-
-        # Check if JSON file exists and is valid
-        json_path = os.path.join(data_dir, f"{dataset_name}.json")
-        if not os.path.exists(json_path):
-            print(f"JSON configuration file not found at {json_path}. Creating one...")
-            # Find the first image in the dataset
-            for root, _, files in os.walk(data_dir):
-                for file in files:
-                    if file.endswith((".png", ".jpg", ".jpeg")):
-                        image_path = os.path.join(root, file)
-                        config = create_default_json_config(dataset_name, data_dir, image_path)
-                        break
-                break
-        else:
-            config = check_and_fix_json(json_path, dataset_name, data_dir, os.path.join(data_dir, "sample_image.png"))
+        config = setup_dataset(dataset_name)
 
     elif data_source == "2":
         # Download dataset from URL
@@ -386,7 +372,7 @@ def main():
         ) or default_image_path
 
         # Reconstruct the image
-        reconstruct_image(image_path, checkpoint_path, config)
+        reconstruct_image(image_path, checkpoint_path, dataset_name)  # Pass dataset_name instead of config
     else:
         raise ValueError("Invalid choice. Please select 1 or 2.")
 
