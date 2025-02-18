@@ -72,12 +72,13 @@ def train_model(config):
             reconstructed, latent_1d = model(images)
 
             # Save latent representation for each image
-            for idx, img in enumerate(images):
-                image_name = f"image_{idx}"
-                save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"])
+            with torch.no_grad():  # Add this context manager
+                    for idx, img in enumerate(images):
+                        image_name = f"image_{idx}"
+                        save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"])
 
-            # Compute reconstruction loss
-            loss = criterion_recon(reconstructed, images)
+                # Compute reconstruction loss
+                loss = criterion_recon(reconstructed, images)
 
             # Backward pass
             optimizer.zero_grad()

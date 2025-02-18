@@ -45,8 +45,10 @@ def save_1d_latent_to_csv(latent_1d, image_name, dataset_name):
     csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
     with open(csv_path, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(latent_1d.cpu().numpy().flatten())
+        # Detach tensor before converting to numpy
+        writer.writerow(latent_1d.detach().cpu().numpy().flatten())
     return csv_path
+
 
 def load_1d_latent_from_csv(csv_path):
     """Load 1D latent representation from CSV"""
