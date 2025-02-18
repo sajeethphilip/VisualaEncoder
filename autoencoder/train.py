@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
-from autoencoder.model import Autoencoder
+from autoencoder.model import Autoencoder,SimpleAutoencoder,ComplexAutoencoder
 from autoencoder.data_loader import load_local_dataset, load_dataset_config
 from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv
 

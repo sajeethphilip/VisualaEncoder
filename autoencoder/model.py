@@ -2,6 +2,115 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class SimpleAutoencoder(nn.Module):
+    def __init__(self, latent_dim=128, conv_layers=3, use_batch_norm=False):
+        super(SimpleAutoencoder, self).__init__()
+
+        # Encoder
+        encoder_layers = []
+        in_channels = 3
+        current_channels = 32
+
+        for _ in range(conv_layers):
+            encoder_layers.extend([
+                nn.Conv2d(in_channels, current_channels, kernel_size=4, stride=2, padding=1),
+                nn.ReLU()
+            ])
+            if use_batch_norm:
+                encoder_layers.append(nn.BatchNorm2d(current_channels))
+            in_channels = current_channels
+            current_channels *= 2
+
+        self.encoder = nn.Sequential(
+            *encoder_layers,
+            nn.Flatten(),
+            nn.Linear(current_channels//2 * 4 * 4, latent_dim)
+        )
+
+        # Decoder
+        decoder_layers = []
+        self.decoder_input = nn.Linear(latent_dim, current_channels//2 * 4 * 4)
+
+        for i in range(conv_layers):
+            decoder_layers.extend([
+                nn.ConvTranspose2d(current_channels//2, current_channels//4,
+                                 kernel_size=4, stride=2, padding=1),
+                nn.ReLU()
+            ])
+            if use_batch_norm and i < conv_layers-1:
+                decoder_layers.append(nn.BatchNorm2d(current_channels//4))
+            current_channels //= 2
+
+        decoder_layers.append(nn.Sigmoid())
+        self.decoder = nn.Sequential(*decoder_layers)
+
+    def forward(self, x):
+        latent = self.encoder(x)
+        reconstructed = self.decoder(self.decoder_input(latent).view(-1, 128, 4, 4))
+        return reconstructed, latent, latent  # Return latent twice for compatibility
+
+class ComplexAutoencoder(nn.Module):
+    def __init__(self, config):
+        super(ComplexAutoencoder, self).__init__()
+
+        self.latent_dim = config["latent_dim"]
+        self.embedding_dim = config["embedding_dim"]
+        use_batch_norm = config["use_batch_norm"]
+
+        # Encoder
+        self.encoder = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64) if use_batch_norm else nn.Identity(),
+            nn.LeakyReLU(0.2),
+
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128) if use_batch_norm else nn.Identity(),
+            nn.LeakyReLU(0.2),
+
+            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256) if use_batch_norm else nn.Identity(),
+            nn.LeakyReLU(0.2),
+
+            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(512) if use_batch_norm else nn.Identity(),
+            nn.LeakyReLU(0.2),
+
+            nn.AdaptiveAvgPool2d((1, 1)) if config["use_adaptive_pooling"] else nn.Identity()
+        )
+
+        # Latent space mappings
+        self.fc_latent = nn.Linear(512, self.latent_dim)
+        self.fc_embedding = nn.Linear(self.latent_dim, self.embedding_dim)
+
+        # Decoder
+        self.decoder_fc = nn.Linear(self.embedding_dim, 512 * 4 * 4)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256) if use_batch_norm else nn.Identity(),
+            nn.LeakyReLU(0.2),
+
+            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128) if use_batch_norm else nn.Identity(),
+            nn.LeakyReLU(0.2),
+
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64) if use_batch_norm else nn.Identity(),
+            nn.LeakyReLU(0.2),
+
+            nn.ConvTranspose2d(64, 3, kernel_size=4, stride=2, padding=1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        x = self.encoder(x)
+        x = x.view(x.size(0), -1)
+        latent = self.fc_latent(x)
+        embedding = self.fc_embedding(latent)
+        x = self.decoder_fc(embedding)
+        x = x.view(-1, 512, 4, 4)
+        reconstructed = self.decoder(x)
+        return reconstructed, latent, embedding
+
 class Autoencoder(nn.Module):
     def __init__(self, config):
         super(Autoencoder, self).__init__()
