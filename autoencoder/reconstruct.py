@@ -58,15 +58,9 @@ def save_reconstructed_image(image_tensor, dataset_name, filename="reconstructed
     image.save(image_path)
     print(f"Reconstructed image saved to {image_path}")
 
-def reconstruct_image(image_path, checkpoint_path, dataset_name, config, enhancement_factor=2.0):
-    """Reconstruct an image with enhanced features."""
-    # Detect device
+def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
+    """Reconstruct all images in a directory structure maintaining the hierarchy."""
     device = get_device()
-
-    # Load dataset configuration
-    #config = load_dataset_config(dataset_name)
-
-    # Initialize model
     model = Autoencoder(config).to(device)
 
     # Load checkpoint
@@ -75,21 +69,65 @@ def reconstruct_image(image_path, checkpoint_path, dataset_name, config, enhance
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
 
-    # Preprocess the input image
-    print("Preprocessing input image...")
-    image_tensor = preprocess_image(image_path, device)
+    # Create base reconstruction directory
+    recon_base_dir = f"data/{dataset_name}/reconstructed_images"
+    os.makedirs(recon_base_dir, exist_ok=True)
 
-    # Generate latent space and embeddings
-    print("Reconstructing image...")
-    with torch.no_grad():
-        _, latent, embeddings = model(image_tensor)
+    # Walk through the input directory
+    for root, dirs, files in os.walk(input_dir):
+        # Create corresponding subdirectory in reconstruction folder
+        relative_path = os.path.relpath(root, input_dir)
+        recon_dir = os.path.join(recon_base_dir, relative_path)
+        os.makedirs(recon_dir, exist_ok=True)
 
-    # Enhance decisive features and reconstruct the image
-    print("Enhancing features...")
-    enhanced_image = enhance_features(latent, embeddings, model, enhancement_factor)
+        print(f"Processing directory: {relative_path}")
 
-    # Save the reconstructed image
-    save_reconstructed_image(enhanced_image, dataset_name)
+        # Process each image in the current directory
+        for file in tqdm(files):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                # Construct paths
+                input_path = os.path.join(root, file)
+                recon_path = os.path.join(recon_dir, file)
+
+                # Process image
+                try:
+                    # Preprocess and reconstruct
+                    image_tensor = preprocess_image(input_path, device)
+                    with torch.no_grad():
+                        _, latent, embeddings = model(image_tensor)
+                        enhanced_image = enhance_features(latent, embeddings, model)
+
+                    # Save reconstructed image
+                    image = transforms.ToPILImage()(enhanced_image.squeeze(0).cpu())
+                    image.save(recon_path)
+                except Exception as e:
+                    print(f"Error processing {input_path}: {str(e)}")
+
+    print(f"Reconstruction complete. Results saved in {recon_base_dir}")
+
+# Modify the main reconstruction function to handle both single files and folders
+def reconstruct_image(path, checkpoint_path, dataset_name, config):
+    """Handle both single image and folder reconstruction."""
+    if os.path.isdir(path):
+        print(f"Processing directory: {path}")
+        reconstruct_folder(path, checkpoint_path, dataset_name, config)
+    else:
+        print(f"Processing single image: {path}")
+        # Original single image reconstruction code
+        device = get_device()
+        model = Autoencoder(config).to(device)
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.eval()
+
+        image_tensor = preprocess_image(path, device)
+        with torch.no_grad():
+            _, latent, embeddings = model(image_tensor)
+            enhanced_image = enhance_features(latent, embeddings, model)
+
+        save_reconstructed_image(enhanced_image, dataset_name,
+                               filename=os.path.basename(path))
+
 
 # Example usage
 if __name__ == "__main__":
