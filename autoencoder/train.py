@@ -21,7 +21,7 @@ def train_model(config):
     # Initialize model
     model = Autoencoder(config).to(device)
 
-     optimizer_config = config["model"]["optimizer"]
+    optimizer_config = config["model"]["optimizer"]
     initial_lr = config["model"]["learning_rate"]
     max_lr = initial_lr * 10  # Allow learning rate to grow up to 10x
     increase_factor = 1.2     # Aggressive growth factor
