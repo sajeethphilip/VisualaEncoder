@@ -5,31 +5,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
-from autoencoder.model import Autoencoder,SimpleAutoencoder,ComplexAutoencoder
+from autoencoder.model import Autoencoder
 from autoencoder.data_loader import load_local_dataset, load_dataset_config
 from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv
 
 from tqdm import tqdm
-def get_model(config):
-    """Initialize the appropriate autoencoder model based on config."""
-    model_selection = config["model"]["model_selection"]
-
-    # Check if complex model is enabled
-    if model_selection["complex"]["enabled"]:
-        model = ComplexAutoencoder(
-            config=model_selection["complex"]
-        )
-    else:
-        # Default to simple model
-        model_selection["simple"]["enabled"] = True  # Ensure simple is enabled
-        model = SimpleAutoencoder(
-            latent_dim=model_selection["simple"]["latent_dim"],
-            conv_layers=model_selection["simple"]["conv_layers"],
-            use_batch_norm=model_selection["simple"]["use_batch_norm"]
-        )
-
-    return model
-
 
 def train_model(config):
     """Train the autoencoder model using the provided configuration."""
@@ -41,7 +21,6 @@ def train_model(config):
 
     # Initialize model
     model = Autoencoder(config).to(device)
-    #model = get_model(config).to(device)
 
     # Define optimizer with adaptive learning rate parameters
     optimizer_config = config["model"]["optimizer"]
