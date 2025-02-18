@@ -53,7 +53,7 @@ def train_model(config):
             checkpoint = torch.load(checkpoint_path, map_location=device)
             # Load with strict=False to allow missing frequencies
             model.load_state_dict(checkpoint["model_state_dict"], strict=False)
-            start_epoch = checkpoint["epoch"]
+            #start_epoch = checkpoint["epoch"]
             best_loss = checkpoint["loss"]
             print(f"Resuming from epoch {start_epoch} with best loss: {best_loss:.4f}")
         except Exception as e:
