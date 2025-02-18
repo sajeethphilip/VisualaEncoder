@@ -62,6 +62,7 @@ class ModifiedAutoencoder(nn.Module):
             nn.BatchNorm2d(512),
             nn.LeakyReLU(0.2),
             nn.AdaptiveAvgPool2d((1, 1))
+        )  # Close the encoder Sequential block properly
 
         # Cosine Latent Mapper
         self.latent_mapper = CosineLatentMapper(high_dim=512, device=device)
