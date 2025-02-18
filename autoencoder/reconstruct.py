@@ -73,19 +73,36 @@ def enhance_features(latent, embedding, model, enhancement_factor=2.0):
 
     return reconstructed_image
 
-def save_reconstructed_image(image_tensor, dataset_name, filename="reconstructed.png"):
-    """Save the reconstructed image to a folder."""
+def save_reconstructed_image(original_tensor, reconstructed_tensor, dataset_name, filename="comparison.png"):
+    """Save the original and reconstructed images side by side."""
     # Create reconstructed images directory
     recon_dir = f"data/{dataset_name}/reconstructed_images"
     os.makedirs(recon_dir, exist_ok=True)
 
-    # Convert tensor to PIL image
-    image = transforms.ToPILImage()(image_tensor.squeeze(0).cpu())
+    # Convert tensors to PIL images
+    original_image = transforms.ToPILImage()(original_tensor.squeeze(0).cpu())
+    reconstructed_image = transforms.ToPILImage()(reconstructed_tensor.squeeze(0).cpu())
 
-    # Save the image
+    # Create a new image with both original and reconstructed
+    total_width = original_image.width * 2
+    max_height = original_image.height
+
+    comparison_image = Image.new('RGB', (total_width, max_height))
+
+    # Paste the images
+    comparison_image.paste(original_image, (0, 0))
+    comparison_image.paste(reconstructed_image, (original_image.width, 0))
+
+    # Add labels
+    from PIL import ImageDraw, ImageFont
+    draw = ImageDraw.Draw(comparison_image)
+    draw.text((10, 10), "Original", fill="white")
+    draw.text((original_image.width + 10, 10), "Reconstructed", fill="white")
+
+    # Save the comparison image
     image_path = os.path.join(recon_dir, filename)
-    image.save(image_path)
-    print(f"Reconstructed image saved to {image_path}")
+    comparison_image.save(image_path)
+    print(f"Comparison image saved to {image_path}")
 
 def reconstruct_image(path, checkpoint_path, dataset_name, config):
     """Handle both single image and folder reconstruction."""
@@ -96,19 +113,22 @@ def reconstruct_image(path, checkpoint_path, dataset_name, config):
         print(f"Processing single image: {path}")
         device = get_device()
 
-        # Use ModifiedAutoencoder instead of Autoencoder
         model = ModifiedAutoencoder(config, device=device).to(device)
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         model.eval()
 
-        image_tensor = preprocess_image(path, device)
+        image_tensor = preprocess_image(path, device, config)
 
         with torch.no_grad():
-            # Modified forward pass returns only reconstructed and latent_1d
             reconstructed, latent_1d = model(image_tensor)
-            save_reconstructed_image(reconstructed, dataset_name,
-                                  filename=os.path.basename(path))
+            save_reconstructed_image(
+                image_tensor,
+                reconstructed,
+                dataset_name,
+                filename=os.path.basename(path)
+            )
+
 
 def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
     """Reconstruct all images in a directory structure maintaining the hierarchy."""

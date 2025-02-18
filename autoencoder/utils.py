@@ -37,6 +37,56 @@ import numpy as np
 from PIL import Image
 import shutil
 
+def load_checkpoint(checkpoint_path, model, config):
+    """Load checkpoint with device compatibility handling"""
+    try:
+        # Load checkpoint with CPU as default device
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+
+        # Get current device
+        device = get_device()
+
+        # Clean state dict from any device-specific prefixes
+        state_dict = checkpoint["model_state_dict"]
+        cleaned_state_dict = {}
+
+        for k, v in state_dict.items():
+            # Remove 'module.' prefix if present (from DataParallel)
+            name = k.replace('module.', '')
+            cleaned_state_dict[name] = v
+
+        # Load cleaned state dict
+        model.load_state_dict(cleaned_state_dict)
+
+        # Move model to current device
+        model = model.to(device)
+
+        print(f"Successfully loaded checkpoint from {checkpoint_path}")
+        return model, checkpoint["epoch"], checkpoint["loss"]
+
+    except Exception as e:
+        print(f"Error loading checkpoint: {e}")
+        return model, 0, float("inf")
+
+def save_checkpoint(model, epoch, loss, config, checkpoint_path):
+    """Save checkpoint with device-agnostic state dict"""
+    # Move model to CPU before saving
+    model = model.cpu()
+
+    # Save checkpoint
+    torch.save({
+        "epoch": epoch,
+        "model_state_dict": model.state_dict(),
+        "loss": loss,
+        "config": config
+    }, checkpoint_path)
+
+    # Move model back to original device
+    device = get_device()
+    model = model.to(device)
+
+    print(f"Saved checkpoint to {checkpoint_path}")
+
 def save_1d_latent_to_csv(latent_1d, image_name, dataset_name):
     """Save 1D latent representation to CSV"""
     data_dir = f"data/{dataset_name}/latent_space"
