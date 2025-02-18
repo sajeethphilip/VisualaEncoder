@@ -4,16 +4,16 @@ import torch.nn.functional as F
 import math
 
 class CosineLatentMapper(nn.Module):
-def __init__(self, high_dim=512, device=None):
-    super(CosineLatentMapper, self).__init__()
-    self.high_dim = high_dim
-    self.device = device if device is not None else torch.device("cpu")
+    def __init__(self, high_dim=512, device=None):
+        super(CosineLatentMapper, self).__init__()
+        self.high_dim = high_dim
+        self.device = device if device is not None else torch.device("cpu")
 
-    # Generate fixed frequency bases for cosine encoding
-    self.frequencies = torch.nn.Parameter(
-        torch.tensor([2*math.pi*prime/high_dim for prime in self._get_first_n_primes(high_dim)]),
-        requires_grad=False
-    ).view(high_dim, 1).to(self.device)  # Move to the specified device
+        # Generate fixed frequency bases for cosine encoding
+        self.frequencies = torch.nn.Parameter(
+            torch.tensor([2*math.pi*prime/high_dim for prime in self._get_first_n_primes(high_dim)]),
+            requires_grad=False
+        ).view(high_dim, 1).to(self.device)  # Move to the specified device
 
     def _get_first_n_primes(self, n):
         primes = []
