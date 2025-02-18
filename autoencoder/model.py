@@ -84,6 +84,24 @@ class ModifiedAutoencoder(nn.Module):
 
         self.adaptive_upsample = nn.Upsample(size=self.input_size, mode='bilinear', align_corners=False)
 
+    def forward(self, x):
+        # Encode
+        x = self.encoder(x)
+        x_flat = x.view(x.size(0), -1)  # (batch_size, 512)
+
+        # Map to 1D using cosine transformation
+        latent_1d = self.latent_mapper.forward_map(x_flat)  # (batch_size, 1)
+
+        # Map back to 512D
+        decoded_flat = self.latent_mapper.inverse_map(latent_1d)  # (batch_size, 512)
+
+        # Reshape and decode
+        decoded_volume = decoded_flat.view(x.size(0), 512, 1, 1)
+        reconstructed = self.decoder(decoded_volume)
+        reconstructed = self.adaptive_upsample(reconstructed)
+
+        return reconstructed, latent_1d
+
 class Autoencoder(nn.Module):
     def __init__(self, config):
         super(Autoencoder, self).__init__()
