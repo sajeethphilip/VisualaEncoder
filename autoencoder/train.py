@@ -35,7 +35,7 @@ def train_model(config):
     device = get_device()
 
     # Initialize model
-    model = ModifiedAutoencoder(config).to(device)
+    model = ModifiedAutoencoder(config, device=device).to(device)
 
     # Define optimizer
     optimizer_config = config["model"]["optimizer"]
