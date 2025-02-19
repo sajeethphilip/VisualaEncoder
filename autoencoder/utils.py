@@ -113,19 +113,30 @@ def extract_and_organize(source_path, dataset_name, is_url=False):
     return data_dir
 
 
-def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
+def save_1d_latent_to_csv(latent_1d, image_path, dataset_name, metadata=None):
     """
-    Save 1D latent representation to CSV with metadata.
+    Save 1D latent representation to CSV with metadata, maintaining original folder hierarchy.
 
     Args:
         latent_1d: PyTorch tensor containing the latent representation
-        image_name: Name of the image file
+        image_path: Full path to the original image
         dataset_name: Name of the dataset
         metadata: Optional dictionary of additional metadata
     """
-    data_dir = f"data/{dataset_name}/latent_space"
-    os.makedirs(data_dir, exist_ok=True)
-    csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
+    # Create base latent space directory
+    base_latent_dir = f"data/{dataset_name}/latent_space"
+
+    # Get relative path from the original image
+    base_data_dir = f"data/{dataset_name}"
+    rel_path = os.path.relpath(image_path, base_data_dir)
+
+    # Create the target directory structure
+    target_dir = os.path.join(base_latent_dir, os.path.dirname(rel_path))
+    os.makedirs(target_dir, exist_ok=True)
+
+    # Create the CSV filename with the same basename as the image
+    basename = os.path.splitext(os.path.basename(image_path))[0]
+    csv_path = os.path.join(target_dir, f"{basename}.csv")
 
     # Convert latent values to numpy and flatten if needed
     if isinstance(latent_1d, torch.Tensor):
@@ -144,6 +155,66 @@ def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
     df.to_csv(csv_path, index=False)
     return csv_path
 
+def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
+    """
+    Reconstruct images from latent CSV files maintaining the original folder hierarchy.
+
+    Args:
+        latent_dir: Directory containing latent space CSV files
+        checkpoint_path: Path to the model checkpoint
+        dataset_name: Name of the dataset
+        config: Model configuration dictionary
+    """
+    device = get_device()
+    print(f"Using device: {device}")
+
+    # Initialize model
+    model = ModifiedAutoencoder(config, device=device).to(device)
+    model, _, _ = load_checkpoint(checkpoint_path, model, config)
+    model.eval()
+
+    # Verify frequencies are loaded
+    if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
+        raise RuntimeError("Frequencies not properly initialized after loading checkpoint")
+
+    print(f"Model loaded successfully with frequencies shape: {model.latent_mapper.frequencies.shape}")
+
+    # Create base reconstruction directory
+    base_recon_dir = f"data/{dataset_name}/reconstructed_images"
+
+    # Walk through the latent space directory structure
+    for root, _, files in os.walk(latent_dir):
+        # Get relative path from latent directory
+        rel_path = os.path.relpath(root, latent_dir)
+
+        # Create corresponding reconstruction directory
+        recon_dir = os.path.join(base_recon_dir, rel_path)
+        os.makedirs(recon_dir, exist_ok=True)
+
+        # Process CSV files in current directory
+        for file in tqdm(files, desc=f"Processing {rel_path}"):
+            if file.endswith('.csv'):
+                try:
+                    csv_path = os.path.join(root, file)
+                    latent_data, metadata = load_1d_latent_from_csv(csv_path)
+                    latent_1d = latent_data.to(device)
+
+                    with torch.no_grad():
+                        decoded_flat = model.latent_mapper.inverse_map(latent_1d)
+                        decoded_volume = decoded_flat.view(1, model.feature_dims, 1, 1)
+                        reconstructed = model.decoder(decoded_volume)
+                        reconstructed = model.adaptive_upsample(reconstructed)
+
+                    # Save reconstructed image with same basename
+                    output_name = os.path.splitext(file)[0] + '.png'
+                    output_path = os.path.join(recon_dir, output_name)
+
+                    # Convert and save the reconstructed image
+                    image = transforms.ToPILImage()(reconstructed.squeeze(0).cpu())
+                    image.save(output_path)
+
+                except Exception as e:
+                    print(f"Error processing {csv_path}: {str(e)}")
 def load_1d_latent_from_csv(csv_path):
     """
     Load 1D latent representation from CSV with metadata.
@@ -904,50 +975,6 @@ def reconstruct_image(path, checkpoint_path, dataset_name, config):
                 dataset_name,
                 filename=os.path.basename(path)
             )
-
-def reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config):
-    """Reconstruct images from latent CSV files with robust checkpoint loading."""
-    device = get_device()
-    print(f"Using device: {device}")
-
-    model = ModifiedAutoencoder(config, device=device).to(device)
-
-    print(f"Loading model checkpoint from {checkpoint_path}...")
-
-    # Use the improved load_checkpoint function
-    model, _, _ = load_checkpoint(checkpoint_path, model, config)
-    model.eval()
-
-    # Verify frequencies are loaded
-    if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
-        raise RuntimeError("Frequencies not properly initialized after loading checkpoint")
-
-    print(f"Model loaded successfully with frequencies shape: {model.latent_mapper.frequencies.shape}")
-
-    # Process files
-    if os.path.isfile(csv_path):
-        files = [csv_path]
-    else:
-        files = [f for f in os.listdir(csv_path) if f.endswith('_latent.csv')]
-        files = [os.path.join(csv_path, f) for f in files]
-
-    for csv_file in tqdm(files, desc="Reconstructing from latent representations"):
-        try:
-            latent_data, metadata = load_1d_latent_from_csv(csv_file)
-            latent_1d = latent_data.to(device)
-
-            with torch.no_grad():
-                decoded_flat = model.latent_mapper.inverse_map(latent_1d)
-                decoded_volume = decoded_flat.view(1, model.feature_dims, 1, 1)
-                reconstructed = model.decoder(decoded_volume)
-                reconstructed = model.adaptive_upsample(reconstructed)
-
-            output_name = os.path.basename(csv_file).replace('_latent.csv', '_reconstructed.png')
-            save_reconstructed_image(None, reconstructed, dataset_name, output_name)
-
-        except Exception as e:
-            print(f"Error processing {csv_file}: {str(e)}")
-            raise  # Re-raise the exception to see the full traceback
 
 
 def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):

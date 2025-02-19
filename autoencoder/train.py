@@ -11,7 +11,10 @@ from datetime import datetime
 from tqdm import tqdm
 
 def train_model(config):
-    """Train the autoencoder model using the provided configuration."""
+    """
+    Modified train_model function to maintain folder hierarchy when saving latent representations.
+    Only showing the relevant changes to the original function.
+    """
     # Load dataset
     dataset_config = config["dataset"]
     train_dataset = load_local_dataset(dataset_config["name"])
@@ -141,7 +144,8 @@ def train_model(config):
                 "epoch": epoch + 1,
                 "timestamp": datetime.now().isoformat()
             }
-            save_1d_latent_to_csv(latent, image_name, dataset_config["name"], metadata)
+            save_1d_latent_to_csv(latent_1d[idx], image_path, config["dataset"]["name"], metadata)
+
 
         # Save checkpoint if loss improved
         if epoch_loss < best_loss:
