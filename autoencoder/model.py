@@ -62,6 +62,7 @@ class ModifiedAutoencoder(nn.Module):
 
         # Load configurations
         dataset_config = config["dataset"]
+        model_config = config["model"]
         self.input_size = dataset_config["input_size"]
         self.in_channels = dataset_config["in_channels"]
         self.feature_dims = model_config["feature_dims"]
