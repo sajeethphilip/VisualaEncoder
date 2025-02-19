@@ -69,8 +69,6 @@ class CosineLatentMapper(nn.Module):
         return torch.tanh(angles / (freqs + 1e-8))  # Add small epsilon
 
 
-
-
 class ModifiedAutoencoder(nn.Module):
     def __init__(self, config, device=None):
         super(ModifiedAutoencoder, self).__init__()

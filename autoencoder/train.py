@@ -51,10 +51,9 @@ def train_model(config):
     try:
         if os.path.exists(checkpoint_path):
             print(f"Loading existing checkpoint from {checkpoint_path}")
-            model, _, best_loss = load_checkpoint(checkpoint_path, model, config) #skip start_epoch
+            model, start_epoch, best_loss = load_checkpoint(checkpoint_path, model, config)
         else:
             print("No existing checkpoint found. Starting fresh training...")
-            # Ensure frequencies are initialized for fresh model
             model.latent_mapper._initialize_frequencies()
     except Exception as e:
         print(f"Error loading checkpoint: {e}")
@@ -73,7 +72,7 @@ def train_model(config):
     criterion_recon = nn.MSELoss()
 
     # Training loop
-    epochs = config["training"]["epochs"]
+    epochs = config["training"]["epochs"] +start_epoch   # Always let there be epoch more counts to go.
     patience = config["training"]["early_stopping"]["patience"]
     patience_counter = 0
 
@@ -92,7 +91,6 @@ def train_model(config):
 
             # Verify latent dimensions before saving
             if latent_1d.shape[1] == feature_dims:
-
                 # Save latent representation
                 with torch.no_grad():
                     for idx in range(images.size(0)):
@@ -105,7 +103,6 @@ def train_model(config):
                         save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"], metadata)
 
                 global_image_counter += images.size(0)
-
 
             # Compute loss and backprop
             loss = criterion_recon(reconstructed, images)
@@ -123,45 +120,37 @@ def train_model(config):
 
         # Calculate average epoch loss
         epoch_loss /= len(train_loader)
-        print(f"Epoch [{epoch + 1}/{epochs if epochs > 0 else 'inf'}], "
-              f"Loss: {epoch_loss:.4f}, "
-              f"Learning Rate: {optimizer.param_groups[0]['lr']:.6f}")
+        print(f"Epoch [{epoch + 1}/{epochs}], Loss: {epoch_loss:.4f}, Learning Rate: {optimizer.param_groups[0]['lr']:.6f}")
 
-        # Check for improvement
+        # Save checkpoint if loss improved
         if epoch_loss < best_loss:
             best_loss = epoch_loss
             patience_counter = 0
-            # Save checkpoint
             os.makedirs(checkpoint_dir, exist_ok=True)
-            # Save checkpoint with device compatibility
-            if epoch_loss < best_loss:
-                save_checkpoint(
-                    model,
-                    epoch + 1,
-                    epoch_loss,
-                    config,
-                    checkpoint_path
-                )
+            save_checkpoint(
+                model,
+                epoch + 1,
+                epoch_loss,
+                config,
+                checkpoint_path
+            )
             print(f"Saved best model checkpoint to {checkpoint_path}")
         else:
             patience_counter += 1
+            if patience_counter >= patience:
+                print(f"No improvement for {patience} epochs. Training stopped.")
+                break
 
-        # Early stopping check
-        if patience_counter >= patience:
-            print(f"No improvement for {patience} epochs. Training stopped.")
-            break
-
-        # Ask user to continue if epochs > 0
-        if epochs > 0 and epoch + 1 >= epochs:
+        # Ask user to continue if epochs completed
+        if epoch + 1 >= epochs:
             user_input = input("Model still learning. Continue training? (y/n): ").lower()
             if user_input == 'y':
                 epochs += 1
             else:
                 break
 
-        epoch += 1
-
     print("Training complete.")
+
 
 
 
