@@ -26,6 +26,9 @@ def train_model(config):
     # Load dataset
     dataset_config = config["dataset"]
     train_dataset = load_local_dataset(dataset_config["name"])
+    # Get feature dimensions from config
+    feature_dims = config["model"]["feature_dims"]
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["training"]["batch_size"],
@@ -48,7 +51,7 @@ def train_model(config):
     try:
         if os.path.exists(checkpoint_path):
             print(f"Loading existing checkpoint from {checkpoint_path}")
-            model, start_epoch, best_loss = load_checkpoint(checkpoint_path, model, config)
+            model, _, best_loss = load_checkpoint(checkpoint_path, model, config) #skip start_epoch
         else:
             print("No existing checkpoint found. Starting fresh training...")
             # Ensure frequencies are initialized for fresh model
@@ -88,21 +91,20 @@ def train_model(config):
             reconstructed, latent_1d = model(images)
 
             # Verify latent dimensions before saving
-            if latent_1d.shape[1] != model.feature_dims:
-                continue
+            if latent_1d.shape[1] == model.feature_dims:
 
-            # Save latent representation
-            with torch.no_grad():
-                for idx in range(images.size(0)):
-                    image_name = f"image_{global_image_counter + idx}"
-                    metadata = {
-                        "batch": epoch,
-                        "index": global_image_counter + idx,
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"], metadata)
+                # Save latent representation
+                with torch.no_grad():
+                    for idx in range(images.size(0)):
+                        image_name = f"image_{global_image_counter + idx}"
+                        metadata = {
+                            "batch": epoch,
+                            "index": global_image_counter + idx,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"], metadata)
 
-            global_image_counter += images.size(0)
+                global_image_counter += images.size(0)
 
 
             # Compute loss and backprop

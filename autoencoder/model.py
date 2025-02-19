@@ -78,8 +78,8 @@ class ModifiedAutoencoder(nn.Module):
             nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2),
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(512),
+            nn.Conv2d(256, self.feature_dims, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(self.feature_dims),
             nn.LeakyReLU(0.2),
             nn.AdaptiveAvgPool2d((1, 1))
         )  # Close the encoder Sequential block properly
@@ -89,7 +89,7 @@ class ModifiedAutoencoder(nn.Module):
 
         # Decoder
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose2d(self.feature_dims, 256, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2),
             nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
@@ -116,7 +116,7 @@ class ModifiedAutoencoder(nn.Module):
         decoded_flat = self.latent_mapper.inverse_map(latent_1d)  # (batch_size, 512)
 
         # Reshape and decode
-        decoded_volume = decoded_flat.view(x.size(0), 512, 1, 1)
+        decoded_volume = decoded_flat.view(x.size(0), self.feature_dims, 1, 1)
         reconstructed = self.decoder(decoded_volume)
         reconstructed = self.adaptive_upsample(reconstructed)
 
