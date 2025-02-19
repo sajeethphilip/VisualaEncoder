@@ -108,7 +108,7 @@ def train_model(config):
 
             # Forward pass
             reconstructed, latent_1d = model(images)
-
+            '''
             # Save latent representations for the batch
             batch_metadata = {
                 'epoch': epoch + 1,
@@ -135,7 +135,7 @@ def train_model(config):
                     )
                 except Exception as e:
                     print(f"Error saving latent space for {full_path}: {str(e)}")
-            '''
+
             # Compute loss and backprop
             loss = criterion_recon(reconstructed, images)
             optimizer.zero_grad()
