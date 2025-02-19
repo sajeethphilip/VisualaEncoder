@@ -106,30 +106,32 @@ def extract_and_organize(source_path, dataset_name, is_url=False):
 
 
 
-def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
+def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None, mode="train"):
     """
-    Save 1D latent representation to CSV with metadata in a columnar format.
-    Each latent dimension gets its own column for easy reading and processing.
+    Save 1D latent representation to CSV with metadata, optimized for both training and prediction.
 
     Args:
         latent_1d: PyTorch tensor containing the latent representation
-        image_name: Name of the image file
-        dataset_name: Name of the dataset (e.g., 'MNIST')
+        image_name: Name/identifier of the image
+        dataset_name: Name of the dataset
         metadata: Optional dictionary of additional metadata
-
-    Returns:
-        str: Path to the saved CSV file
+        mode: Either "train" or "predict" to handle different saving strategies
     """
+    # Standardize base directory structure
     data_dir = f"data/{dataset_name}/latent_space"
     os.makedirs(data_dir, exist_ok=True)
-    csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
+
+    # Create a standardized filename that's consistent across epochs
+    # Remove any epoch-specific information from image_name
+    base_name = image_name.split('_')[0] if '_' in image_name else image_name
+    csv_path = os.path.join(data_dir, f"{base_name}_latent.csv")
 
     # Convert latent values to numpy and flatten
     latent_values = latent_1d.detach().cpu().numpy().flatten()
 
-    # Create a dictionary for the DataFrame
+    # Create base data dictionary
     data_dict = {
-        'image_name': [image_name],
+        'image_name': [base_name],
         'timestamp': [datetime.now().isoformat()],
     }
 
@@ -140,11 +142,16 @@ def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
     # Add any additional metadata
     if metadata:
         for key, value in metadata.items():
-            data_dict[key] = [value]
+            if key != 'epoch':  # Skip epoch information in training mode
+                data_dict[key] = [value]
 
-    # Create DataFrame and save to CSV
+    # Create DataFrame
     df = pd.DataFrame(data_dict)
-    df.to_csv(csv_path, index=False)
+
+    # In training mode, we'll overwrite existing files
+    # In predict mode, we'll create new files if they don't exist
+    if mode == "train" or not os.path.exists(csv_path):
+        df.to_csv(csv_path, index=False)
 
     return csv_path
 
@@ -1043,7 +1050,41 @@ def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
                 except Exception as e:
                     print(f"Error processing {input_path}: {str(e)}")
 
+def process_image(model, image_path, dataset_name, config):
+    """Process a single image and save its latent representation."""
+    device = get_device()
+    image_tensor = preprocess_image(image_path, device, config)
 
+    with torch.no_grad():
+        reconstructed, latent_1d = model(image_tensor)
+
+        # Create a consistent image identifier from the filename
+        image_name = os.path.splitext(os.path.basename(image_path))[0]
+
+        # Save latent representation
+        metadata = {
+            "source_image": image_path,
+            "processing_time": datetime.now().isoformat()
+        }
+
+        # Save with predict mode
+        save_1d_latent_to_csv(
+            latent_1d[0],  # Take first item as we process one image
+            image_name,
+            dataset_name,
+            metadata,
+            mode="predict"
+        )
+
+        return reconstructed
+
+def process_directory(model, input_dir, dataset_name, config):
+    """Process all images in a directory and save their latent representations."""
+    for root, _, files in os.walk(input_dir):
+        for file in tqdm(files):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                input_path = os.path.join(root, file)
+                process_image(model, input_path, dataset_name, config)
 
 # Example usage
 if __name__ == "__main__":

@@ -82,27 +82,30 @@ def train_model(config):
 
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
 
-        for batch in progress_bar:
+        for batch_idx, batch in enumerate(progress_bar):
             images, _ = batch
             images = images.to(device)
 
             # Forward pass
             reconstructed, latent_1d = model(images)
 
-            # Verify latent dimensions before saving
-            if latent_1d.shape[1] == feature_dims:
-                # Save latent representation
-                with torch.no_grad():
-                    for idx in range(images.size(0)):
-                        image_name = f"image_{global_image_counter + idx}"
-                        metadata = {
-                            "batch": epoch,
-                            "index": global_image_counter + idx,
-                            "timestamp": datetime.now().isoformat()
-                        }
-                        save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"], metadata)
-
-                global_image_counter += images.size(0)
+            # Save latent representation only if needed
+            if config.get("save_latent_during_training", False):  # Make this configurable
+                # Save latent space for each image in batch
+                for idx in range(images.size(0)):
+                    # Create a consistent image identifier
+                    image_name = f"image_{batch_idx * config['training']['batch_size'] + idx}"
+                    metadata = {
+                        "batch_index": batch_idx,
+                        "global_index": batch_idx * config['training']['batch_size'] + idx
+                    }
+                    save_1d_latent_to_csv(
+                        latent_1d[idx],
+                        image_name,
+                        config["dataset"]["name"],
+                        metadata,
+                        mode="train"
+                    )
 
             # Compute loss and backprop
             loss = criterion_recon(reconstructed, images)
