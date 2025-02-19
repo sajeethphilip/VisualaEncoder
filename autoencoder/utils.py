@@ -104,6 +104,76 @@ def extract_and_organize(source_path, dataset_name, is_url=False):
     shutil.rmtree(temp_dir)
     return data_dir
 
+
+
+def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
+    """Save 1D latent representation to CSV with metadata"""
+    data_dir = f"data/{dataset_name}/latent_space"
+    os.makedirs(data_dir, exist_ok=True)
+
+    csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
+    with open(csv_path, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        # Save metadata if provided
+        if metadata:
+            for key, value in metadata.items():
+                writer.writerow([key, value])
+        # Save timestamp
+        writer.writerow(["timestamp", datetime.now().isoformat()])
+        # Save image name
+        writer.writerow(["image_name", image_name])
+        # Save latent values
+        writer.writerow(["latent_values"])
+        writer.writerow(latent_1d.detach().cpu().numpy().flatten())
+    return csv_path
+
+def load_1d_latent_from_csv(csv_path):
+    """Load 1D latent representation from CSV with metadata"""
+    metadata = {}
+    latent_data = None
+
+    with open(csv_path, "r") as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            if len(row) == 2:  # Metadata row
+                metadata[row[0]] = row[1]
+            elif row[0] == "latent_values":
+                latent_data = next(reader)  # Read next row for values
+                break
+
+    if latent_data is None:
+        raise ValueError("No latent values found in CSV file")
+
+    latent_1d = torch.tensor([float(x) for x in latent_data])
+    return latent_1d.unsqueeze(0), metadata  # Return both latent and metadata
+
+def save_checkpoint(model, epoch, loss, config, checkpoint_path):
+    """Save checkpoint with device-agnostic state dict and frequencies"""
+    # Move model to CPU before saving
+    model = model.cpu()
+
+    # Ensure frequencies are saved
+    if hasattr(model.latent_mapper, 'frequencies'):
+        state_dict = model.state_dict()
+    else:
+        print("Initializing frequencies before saving...")
+        model.latent_mapper._initialize_frequencies()
+        state_dict = model.state_dict()
+
+    # Save checkpoint
+    torch.save({
+        "epoch": epoch,
+        "model_state_dict": state_dict,
+        "loss": loss,
+        "config": config
+    }, checkpoint_path)
+
+    # Move model back to original device
+    device = get_device()
+    model = model.to(device)
+
+    print(f"Saved checkpoint to {checkpoint_path}")
+
 def load_checkpoint(checkpoint_path, model, config):
     """Load checkpoint with device compatibility handling"""
     try:
@@ -120,63 +190,22 @@ def load_checkpoint(checkpoint_path, model, config):
 
         # Initialize frequencies if missing
         if "latent_mapper.frequencies" not in cleaned_state_dict:
-            print("Frequencies not found in checkpoint. Initializing new frequencies...")
+            print("Adding frequencies to model state...")
             model.latent_mapper._initialize_frequencies()
+            cleaned_state_dict["latent_mapper.frequencies"] = model.latent_mapper.frequencies
 
-        # Load state dict with strict=False to allow missing frequencies
-        model.load_state_dict(cleaned_state_dict, strict=False)
+        # Load state dict
+        model.load_state_dict(cleaned_state_dict, strict=True)
 
         print(f"Successfully loaded checkpoint from {checkpoint_path}")
         return model, checkpoint.get("epoch", 0), checkpoint.get("loss", float("inf"))
 
     except Exception as e:
         print(f"Error loading checkpoint: {e}")
-        print("Starting fresh training...")
         return model, 0, float("inf")
 
 
-def save_checkpoint(model, epoch, loss, config, checkpoint_path):
-    """Save checkpoint with device-agnostic state dict"""
-    # Move model to CPU before saving
-    model = model.cpu()
 
-    # Save checkpoint
-    torch.save({
-        "epoch": epoch,
-        "model_state_dict": model.state_dict(),
-        "loss": loss,
-        "config": config
-    }, checkpoint_path)
-
-    # Move model back to original device
-    device = get_device()
-    model = model.to(device)
-
-    print(f"Saved checkpoint to {checkpoint_path}")
-
-def save_1d_latent_to_csv(latent_1d, image_name, dataset_name):
-    """Save 1D latent representation to CSV with metadata"""
-    data_dir = f"data/{dataset_name}/latent_space"
-    os.makedirs(data_dir, exist_ok=True)
-
-    csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
-    with open(csv_path, "w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        # Save metadata and latent representation
-        writer.writerow(["image_name", image_name])
-        writer.writerow(["timestamp", datetime.now().isoformat()])
-        writer.writerow(["latent_values"])
-        writer.writerow(latent_1d.detach().cpu().numpy().flatten())
-
-
-
-def load_1d_latent_from_csv(csv_path):
-    """Load 1D latent representation from CSV"""
-    with open(csv_path, "r") as csvfile:
-        reader = csv.reader(csvfile)
-        latent_data = next(reader)  # Read first row
-        latent_1d = torch.tensor([float(x) for x in latent_data])
-    return latent_1d.unsqueeze(0)  # Add batch dimension
 
 def setup_dataset(dataset_name):
     """Set up a torchvision dataset and return a full configuration."""

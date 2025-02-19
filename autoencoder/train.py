@@ -101,11 +101,18 @@ def train_model(config):
             reconstructed, latent_1d = model(images)
 
             # Save latent representation
+            # In the training loop, modify latent saving:
             with torch.no_grad():
                 for idx in range(images.size(0)):
                     image_name = f"image_{global_image_counter + idx}"
-                    save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"])
+                    metadata = {
+                        "batch": epoch,
+                        "index": global_image_counter + idx,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"], metadata)
                 global_image_counter += images.size(0)
+
 
             # Compute loss and backprop
             loss = criterion_recon(reconstructed, images)

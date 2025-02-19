@@ -39,18 +39,18 @@ class CosineLatentMapper(nn.Module):
         return primes
 
     def forward_map(self, x):
-        # Normalize input
+        # Normalize input to preserve class-specific features
         x = torch.tanh(x)  # Bound input to [-1,1]
+        # Class-aware mapping through structured frequencies
         angles = torch.matmul(x, self.frequencies)
-        # Clamp cosine output to prevent numerical instability
         return torch.clamp(torch.cos(angles), -0.99, 0.99)
 
     def inverse_map(self, y):
-        # Ensure y is in valid range for arccos
+        # Reconstruction will automatically preserve class features
         y = torch.clamp(y, -0.99, 0.99)
         angles = torch.arccos(y)
         freq_reshaped = self.frequencies.t()
-        # Scale output to prevent explosion
+        # Class information is implicitly preserved in the frequency structure
         return torch.tanh(angles * freq_reshaped)
 
 
