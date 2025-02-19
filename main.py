@@ -4,7 +4,6 @@ import torch
 from torchvision import datasets, transforms
 from PIL import Image
 from autoencoder.train import train_model
-from autoencoder.data_loader import load_local_dataset, load_dataset_config
 from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize,find_first_image,reconstruct_image,reconstruct_from_latent
 
 def create_default_json_config(dataset_name, data_dir, image_path):
