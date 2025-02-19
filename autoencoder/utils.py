@@ -154,59 +154,81 @@ def load_1d_latent_from_csv(csv_path):
 
 
 def save_checkpoint(model, epoch, loss, config, checkpoint_path):
-    """Save checkpoint with device-agnostic state dict and frequencies"""
-    # Move model to CPU before saving
+    """Save checkpoint with explicit frequency handling."""
+    # Ensure model is in eval mode and on CPU for saving
+    model.eval()
     model = model.cpu()
 
-    # Ensure frequencies are saved
-    if hasattr(model.latent_mapper, 'frequencies'):
-        state_dict = model.state_dict()
-    else:
+    # Verify frequencies exist and initialize if needed
+    if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
         print("Initializing frequencies before saving...")
+        # Assuming latent_mapper has the initialization method
         model.latent_mapper._initialize_frequencies()
-        state_dict = model.state_dict()
 
-    # Save checkpoint with complete state
-    torch.save({
+    # Create state dict with explicit frequency saving
+    state_dict = model.state_dict()
+
+    # Verify frequencies are in state dict
+    if 'latent_mapper.frequencies' not in state_dict:
+        state_dict['latent_mapper.frequencies'] = model.latent_mapper.frequencies
+
+    # Save complete checkpoint
+    checkpoint = {
         "epoch": epoch,
         "model_state_dict": state_dict,
-        "frequencies": model.latent_mapper.frequencies,  # Save frequencies separately
+        "frequencies": model.latent_mapper.frequencies,  # Save frequencies separately as well
         "loss": loss,
         "config": config
-    }, checkpoint_path)
+    }
 
-    print(f"Saved checkpoint to {checkpoint_path}")
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
+
+    # Save checkpoint
+    torch.save(checkpoint, checkpoint_path)
+    print(f"Saved checkpoint to {checkpoint_path} with frequencies shape: {model.latent_mapper.frequencies.shape}")
+
 
 def load_checkpoint(checkpoint_path, model, config):
-    """Load checkpoint with device compatibility handling"""
+    """Load checkpoint with robust frequency handling."""
+    device = model.device
     try:
-        # Load checkpoint with CPU as default device
+        # Load checkpoint
+        print(f"Loading checkpoint from {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
 
-        # Clean state dict from any device-specific prefixes
+        # First handle frequencies
+        if "frequencies" in checkpoint:
+            print("Loading frequencies from checkpoint...")
+            model.latent_mapper.frequencies = checkpoint["frequencies"].to(device)
+        else:
+            print("No frequencies found in checkpoint, initializing...")
+            model.latent_mapper._initialize_frequencies()
+
+        # Clean state dict
         state_dict = checkpoint["model_state_dict"]
         cleaned_state_dict = {}
 
         for k, v in state_dict.items():
+            # Remove any 'module.' prefix from DataParallel
             name = k.replace('module.', '')
             cleaned_state_dict[name] = v
 
-        # Initialize frequencies if missing
-        if "latent_mapper.frequencies" not in cleaned_state_dict:
-            print("Adding frequencies to model state...")
-            model.latent_mapper._initialize_frequencies()
-            cleaned_state_dict["latent_mapper.frequencies"] = model.latent_mapper.frequencies
+        # Ensure frequencies are in state dict
+        if 'latent_mapper.frequencies' not in cleaned_state_dict:
+            cleaned_state_dict['latent_mapper.frequencies'] = model.latent_mapper.frequencies
 
         # Load state dict
         model.load_state_dict(cleaned_state_dict, strict=True)
 
-        print(f"Successfully loaded checkpoint from {checkpoint_path}")
+        print(f"Successfully loaded checkpoint with frequencies shape: {model.latent_mapper.frequencies.shape}")
         return model, checkpoint.get("epoch", 0), checkpoint.get("loss", float("inf"))
 
     except Exception as e:
         print(f"Error loading checkpoint: {e}")
+        print("Initializing fresh model with new frequencies...")
+        model.latent_mapper._initialize_frequencies()
         return model, 0, float("inf")
-
 
 def setup_dataset(dataset_name):
     """Set up a torchvision dataset and return a full configuration."""
@@ -852,20 +874,21 @@ def reconstruct_image(path, checkpoint_path, dataset_name, config):
             )
 
 def reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config):
-    """Reconstruct images from latent CSV files."""
+    """Reconstruct images from latent CSV files with robust checkpoint loading."""
     device = get_device()
     model = ModifiedAutoencoder(config, device=device).to(device)
 
     print(f"Loading model checkpoint from {checkpoint_path}...")
-    checkpoint = torch.load(checkpoint_path, map_location=device)
 
-    # First load the frequencies if available
-    if "frequencies" in checkpoint:
-        model.latent_mapper.frequencies = checkpoint["frequencies"].to(device)
-
-    # Then load the rest of the model state
-    model.load_state_dict(checkpoint["model_state_dict"])
+    # Use the improved load_checkpoint function
+    model, _, _ = load_checkpoint(checkpoint_path, model, config)
     model.eval()
+
+    # Verify frequencies are loaded
+    if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
+        raise RuntimeError("Frequencies not properly initialized after loading checkpoint")
+
+    print(f"Model loaded successfully with frequencies shape: {model.latent_mapper.frequencies.shape}")
 
     # Process files
     if os.path.isfile(csv_path):
@@ -890,8 +913,6 @@ def reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config):
 
         except Exception as e:
             print(f"Error processing {csv_file}: {str(e)}")
-
-
 
 
 def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
