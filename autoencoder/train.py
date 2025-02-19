@@ -88,10 +88,7 @@ def train_model(config):
             reconstructed, latent_1d = model(images)
 
             # Verify latent dimensions before saving
-            if latent_1d.shape[1] != 512:
-                print(f"Warning: Unexpected latent dimension {latent_1d.shape[1]}, reinitializing model...")
-                model = ModifiedAutoencoder(config, device=device).to(device)
-                model.latent_mapper._initialize_frequencies()
+            if latent_1d.shape[1] != model.feature_dims:
                 continue
 
             # Save latent representation

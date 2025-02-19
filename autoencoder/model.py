@@ -64,6 +64,7 @@ class ModifiedAutoencoder(nn.Module):
         dataset_config = config["dataset"]
         self.input_size = dataset_config["input_size"]
         self.in_channels = dataset_config["in_channels"]
+        self.feature_dims = model_config["feature_dims"]
 
         # Encoder
         self.encoder = nn.Sequential(
@@ -83,7 +84,7 @@ class ModifiedAutoencoder(nn.Module):
         )  # Close the encoder Sequential block properly
 
         # Cosine Latent Mapper
-        self.latent_mapper = CosineLatentMapper(high_dim=512, device=device)
+        self.latent_mapper = CosineLatentMapper(high_dim=self.feature_dims, device=device)
 
         # Decoder
         self.decoder = nn.Sequential(

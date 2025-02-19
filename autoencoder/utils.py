@@ -948,7 +948,7 @@ def reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config):
 
             with torch.no_grad():
                 decoded_flat = model.latent_mapper.inverse_map(latent_1d)
-                decoded_volume = decoded_flat.view(1, 512, 1, 1)
+                decoded_volume = decoded_flat.view(1, model.feature_dims, 1, 1)
                 reconstructed = model.decoder(decoded_volume)
                 reconstructed = model.adaptive_upsample(reconstructed)
 
