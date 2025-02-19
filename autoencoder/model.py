@@ -41,6 +41,7 @@ class CosineLatentMapper(nn.Module):
     def forward_map(self, x):
         # Normalize input to preserve class-specific features
         x = torch.tanh(x)  # Bound input to [-1,1]
+        frequencies = self.frequencies.expand(x.size(0), -1) # Expand to batch size
         # Class-aware mapping through structured frequencies
         angles = torch.matmul(x, self.frequencies)
         return torch.clamp(torch.cos(angles), -0.99, 0.99)

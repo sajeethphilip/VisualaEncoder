@@ -91,7 +91,7 @@ def train_model(config):
             reconstructed, latent_1d = model(images)
 
             # Verify latent dimensions before saving
-            if latent_1d.shape[1] == model.feature_dims:
+            if latent_1d.shape[1] == feature_dims:
 
                 # Save latent representation
                 with torch.no_grad():
