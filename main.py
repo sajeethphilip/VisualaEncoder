@@ -4,9 +4,8 @@ import torch
 from torchvision import datasets, transforms
 from PIL import Image
 from autoencoder.train import train_model
-from autoencoder.reconstruct import reconstruct_image,reconstruct_from_latent
 from autoencoder.data_loader import load_local_dataset, load_dataset_config
-from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize,find_first_image
+from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize,find_first_image,reconstruct_image,reconstruct_from_latent
 
 def create_default_json_config(dataset_name, data_dir, image_path):
     """Create a default JSON configuration file interactively."""
@@ -349,16 +348,9 @@ def main():
 
             print(f"\n{Style.BRIGHT}{Fore.CYAN}Reconstructing image(s)...{Style.RESET_ALL}")
             if config["training"].get("invert_DBNN", True):
-                # Default CSV path
                 default_csv_path = os.path.join(f"data/{dataset_name}/latent_space")
                 print(f"\nFound latent representations in: {default_csv_path}")
-
-                # Ask user for CSV file path
-                csv_path = input(
-                    f"Enter the path to the latent CSV file/folder (default: {default_csv_path}): "
-                ) or default_csv_path
-
-                # Reconstruct from latent representations
+                csv_path = input(f"Enter the path to the latent CSV file/folder (default: {default_csv_path}): ") or default_csv_path
                 reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config)
             else:
                 input_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter path to image or folder to reconstruct: {Style.RESET_ALL}")
