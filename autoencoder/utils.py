@@ -208,8 +208,6 @@ def load_checkpoint(checkpoint_path, model, config):
         return model, 0, float("inf")
 
 
-
-
 def setup_dataset(dataset_name):
     """Set up a torchvision dataset and return a full configuration."""
     # Convert dataset name to uppercase for torchvision
