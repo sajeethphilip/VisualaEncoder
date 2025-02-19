@@ -15,7 +15,9 @@ class CosineLatentMapper(nn.Module):
         if not hasattr(self, 'frequencies'):
             frequencies = torch.tensor([2*math.pi*prime/self.high_dim for prime in self._get_first_n_primes(self.high_dim)])
             frequencies = frequencies / frequencies.max()  # Normalize to [0,1] range
-            self.register_buffer('frequencies', frequencies.view(self.high_dim, 1))
+            # Change shape to match input dimensions - keep as 1D tensor
+            self.register_buffer('frequencies', frequencies)
+
 
     def load_state_dict(self, state_dict, strict=False):
         """Override load_state_dict to handle missing frequencies"""
@@ -39,20 +41,32 @@ class CosineLatentMapper(nn.Module):
         return primes
 
     def forward_map(self, x):
+        # x shape: [batch_size, high_dim]
         # Normalize input to preserve class-specific features
         x = torch.tanh(x)  # Bound input to [-1,1]
-        frequencies = self.frequencies.expand(x.size(0), -1) # Expand to batch size
-        # Class-aware mapping through structured frequencies
-        angles = torch.matmul(x, self.frequencies)
+
+        # Reshape frequencies to match batch dimension
+        # frequencies shape: [high_dim] -> [1, high_dim]
+        freqs = self.frequencies.view(1, -1)
+
+        # Expand frequencies to match batch size
+        # [1, high_dim] -> [batch_size, high_dim]
+        freqs = freqs.expand(x.size(0), -1)
+
+        # Element-wise multiplication instead of matmul
+        angles = x * freqs
+
         return torch.clamp(torch.cos(angles), -0.99, 0.99)
 
     def inverse_map(self, y):
-        # Reconstruction will automatically preserve class features
+        # y shape: [batch_size, high_dim]
         y = torch.clamp(y, -0.99, 0.99)
         angles = torch.arccos(y)
-        freq_reshaped = self.frequencies.t()
-        # Class information is implicitly preserved in the frequency structure
-        return torch.tanh(angles * freq_reshaped)
+
+        # Reshape frequencies for inverse mapping
+        freqs = self.frequencies.view(1, -1).expand(y.size(0), -1)
+
+        return torch.tanh(angles / (freqs + 1e-8))  # Add small epsilon
 
 
 
