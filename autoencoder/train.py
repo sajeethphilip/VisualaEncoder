@@ -11,10 +11,7 @@ from datetime import datetime
 from tqdm import tqdm
 
 def train_model(config):
-    """
-    Modified train_model function to maintain folder hierarchy when saving latent representations.
-    Only showing the relevant changes to the original function.
-    """
+    """Train the autoencoder model using the provided configuration."""
     # Load dataset
     dataset_config = config["dataset"]
     train_dataset = load_local_dataset(dataset_config["name"])
@@ -93,29 +90,40 @@ def train_model(config):
     for epoch in range(start_epoch, epochs):
         model.train()
         epoch_loss = 0.0
-
-        # Dictionary to store latent representations and image paths
-        latent_dict = {}
+        num_batches = 0
 
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
 
-        for batch in progress_bar:
-            images, paths = batch
-            images = images.to(device)  # Move images to device
+        for batch_idx, (images, paths) in enumerate(progress_bar):
+            # Get full paths from the dataset
+            if hasattr(train_dataset, 'imgs'):
+                # For ImageFolder dataset
+                full_paths = [train_dataset.imgs[i][0] for i in paths]
+            else:
+                # Fallback to paths if imgs not available
+                full_paths = paths
+
+            images = images.to(device)
 
             # Forward pass
             reconstructed, latent_1d = model(images)
 
-            # Handle paths
-            if isinstance(paths, torch.Tensor):
-                paths = [str(path.item()) for path in paths]
-            else:
-                paths = [str(path) for path in paths]
-
-            # Store latent representations
-            for idx in range(images.size(0)):
-                image_path = paths[idx]
-                latent_dict[image_path] = latent_1d[idx].detach().cpu()
+            # Save latent representations for each image in the batch
+            for idx, full_path in enumerate(full_paths):
+                metadata = {
+                    "epoch": epoch + 1,
+                    "batch": batch_idx,
+                    "timestamp": datetime.now().isoformat()
+                }
+                try:
+                    save_1d_latent_to_csv(
+                        latent_1d[idx],
+                        full_path,
+                        dataset_config["name"],
+                        metadata
+                    )
+                except Exception as e:
+                    print(f"Error saving latent space for {full_path}: {str(e)}")
 
             # Compute loss and backprop
             loss = criterion_recon(reconstructed, images)
@@ -126,26 +134,17 @@ def train_model(config):
 
             current_loss = loss.item()
             epoch_loss += current_loss
+            num_batches += 1
+
             progress_bar.set_postfix({
                 'loss': current_loss,
+                'avg_loss': epoch_loss / num_batches,
                 'lr': optimizer.param_groups[0]['lr']
             })
 
         # Calculate average epoch loss
-        epoch_loss /= len(train_loader)
+        epoch_loss /= num_batches
         print(f"Epoch [{epoch + 1}/{epochs}], Loss: {epoch_loss:.4f}, Learning Rate: {optimizer.param_groups[0]['lr']:.6f}")
-
-        # Save latent representations
-        for image_path, latent in latent_dict.items():
-            subfolder = os.path.dirname(image_path)
-            image_name = os.path.basename(image_path).split('.')[0]
-
-            metadata = {
-                "epoch": epoch + 1,
-                "timestamp": datetime.now().isoformat()
-            }
-            save_1d_latent_to_csv(latent_1d[idx], image_path, config["dataset"]["name"], metadata)
-
 
         # Save checkpoint if loss improved
         if epoch_loss < best_loss:
@@ -180,7 +179,7 @@ def train_model(config):
                 break
 
     print("Training complete.")
-
+    return model
 
 def save_final_representations(model, loader, device, dataset_name):
     """Save the final latent space and embeddings."""
