@@ -845,35 +845,50 @@ def enhance_features(latent, embedding, model, enhancement_factor=2.0):
     return reconstructed_image
 
 def save_reconstructed_image(original_tensor, reconstructed_tensor, dataset_name, filename="comparison.png"):
-    """Save the original and reconstructed images side by side."""
+    """
+    Save reconstructed images, with optional original image comparison.
+
+    Args:
+        original_tensor: Original image tensor or None if unavailable
+        reconstructed_tensor: Reconstructed image tensor
+        dataset_name: Name of the dataset
+        filename: Output filename
+    """
     # Create reconstructed images directory
     recon_dir = f"data/{dataset_name}/reconstructed_images"
     os.makedirs(recon_dir, exist_ok=True)
 
-    # Convert tensors to PIL images
-    original_image = transforms.ToPILImage()(original_tensor.squeeze(0).cpu())
+    # Convert reconstructed tensor to PIL image
     reconstructed_image = transforms.ToPILImage()(reconstructed_tensor.squeeze(0).cpu())
 
-    # Create a new image with both original and reconstructed
-    total_width = original_image.width * 2
-    max_height = original_image.height
+    if original_tensor is not None:
+        # If we have an original image, create a comparison
+        original_image = transforms.ToPILImage()(original_tensor.squeeze(0).cpu())
 
-    comparison_image = Image.new('RGB', (total_width, max_height))
+        # Create a new image with both original and reconstructed
+        total_width = original_image.width * 2
+        max_height = original_image.height
+        comparison_image = Image.new('RGB', (total_width, max_height))
 
-    # Paste the images
-    comparison_image.paste(original_image, (0, 0))
-    comparison_image.paste(reconstructed_image, (original_image.width, 0))
+        # Paste the images
+        comparison_image.paste(original_image, (0, 0))
+        comparison_image.paste(reconstructed_image, (original_image.width, 0))
 
-    # Add labels
-    from PIL import ImageDraw, ImageFont
-    draw = ImageDraw.Draw(comparison_image)
-    draw.text((10, 10), "Original", fill="white")
-    draw.text((original_image.width + 10, 10), "Reconstructed", fill="white")
+        # Add labels
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(comparison_image)
+        draw.text((10, 10), "Original", fill="white")
+        draw.text((original_image.width + 10, 10), "Reconstructed", fill="white")
 
-    # Save the comparison image
+        output_image = comparison_image
+    else:
+        # If no original image, just save the reconstruction
+        output_image = reconstructed_image
+
+    # Save the image
     image_path = os.path.join(recon_dir, filename)
-    comparison_image.save(image_path)
-    print(f"Comparison image saved to {image_path}")
+    output_image.save(image_path)
+    print(f"Image saved to {image_path}")
 
 def reconstruct_image(path, checkpoint_path, dataset_name, config):
     """Handle both single image and folder reconstruction."""
