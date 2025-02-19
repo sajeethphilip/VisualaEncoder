@@ -170,51 +170,72 @@ def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
 
     # Initialize model
     model = ModifiedAutoencoder(config, device=device).to(device)
-    model, _, _ = load_checkpoint(checkpoint_path, model, config)
+
+    # Load checkpoint
+    print(f"Loading checkpoint from {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
-
-    # Verify frequencies are loaded
-    if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
-        raise RuntimeError("Frequencies not properly initialized after loading checkpoint")
-
-    print(f"Model loaded successfully with frequencies shape: {model.latent_mapper.frequencies.shape}")
 
     # Create base reconstruction directory
     base_recon_dir = f"data/{dataset_name}/reconstructed_images"
+    os.makedirs(base_recon_dir, exist_ok=True)
 
-    # Walk through the latent space directory structure
-    for root, _, files in os.walk(latent_dir):
+    def process_directory(current_dir):
+        """Process a directory and its subdirectories recursively."""
         # Get relative path from latent directory
-        rel_path = os.path.relpath(root, latent_dir)
+        rel_path = os.path.relpath(current_dir, latent_dir)
 
         # Create corresponding reconstruction directory
         recon_dir = os.path.join(base_recon_dir, rel_path)
         os.makedirs(recon_dir, exist_ok=True)
 
-        # Process CSV files in current directory
-        for file in tqdm(files, desc=f"Processing {rel_path}"):
-            if file.endswith('.csv'):
+        # Process all CSV files in current directory
+        csv_files = [f for f in os.listdir(current_dir) if f.endswith('.csv')]
+        if csv_files:
+            print(f"Processing {rel_path}: {len(csv_files)} files")
+
+            for file in tqdm(csv_files, desc=f"Processing {rel_path}"):
                 try:
-                    csv_path = os.path.join(root, file)
-                    latent_data, metadata = load_1d_latent_from_csv(csv_path)
-                    latent_1d = latent_data.to(device)
+                    csv_path = os.path.join(current_dir, file)
+
+                    # Load latent data from CSV
+                    df = pd.read_csv(csv_path)
+                    latent_row = df[df['type'] == 'latent_values'].iloc[0]
+                    latent_values = np.array([float(x) for x in latent_row['value'].split(',')]).reshape(1, -1)
+                    latent_tensor = torch.tensor(latent_values, dtype=torch.float32).to(device)
 
                     with torch.no_grad():
-                        decoded_flat = model.latent_mapper.inverse_map(latent_1d)
-                        decoded_volume = decoded_flat.view(1, model.feature_dims, 1, 1)
+                        # Inverse map the latent values
+                        decoded_flat = model.latent_mapper.inverse_map(latent_tensor)
+                        decoded_volume = decoded_flat.view(1, -1, 1, 1)
                         reconstructed = model.decoder(decoded_volume)
-                        reconstructed = model.adaptive_upsample(reconstructed)
 
-                    # Save reconstructed image with same basename
+                        if hasattr(model, 'adaptive_upsample'):
+                            reconstructed = model.adaptive_upsample(reconstructed)
+
+                    # Save reconstructed image
                     output_name = os.path.splitext(file)[0] + '.png'
                     output_path = os.path.join(recon_dir, output_name)
 
-                    # Convert and save the reconstructed image
+                    # Convert and save
                     image = transforms.ToPILImage()(reconstructed.squeeze(0).cpu())
                     image.save(output_path)
 
                 except Exception as e:
                     print(f"Error processing {csv_path}: {str(e)}")
+                    continue
+
+        # Process subdirectories
+        subdirs = [d for d in os.listdir(current_dir)
+                  if os.path.isdir(os.path.join(current_dir, d))]
+        for subdir in subdirs:
+            process_directory(os.path.join(current_dir, subdir))
+
+    # Start processing from root directory
+    process_directory(latent_dir)
+    print("Reconstruction complete!")
+
 def load_1d_latent_from_csv(csv_path):
     """
     Load 1D latent representation from CSV with metadata.
