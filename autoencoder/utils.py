@@ -133,7 +133,10 @@ def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
     csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
 
     # Convert latent values to numpy and flatten
-    latent_values = latent_1d.detach().cpu().numpy().flatten()
+    if isinstance(latent_1d, torch.Tensor):  # Check if it's a tensor
+        latent_values = latent_1d.cpu().numpy().flatten()  # Convert to NumPy array
+    else:
+        latent_values = latent_1d.flatten()  # Assume it's already a NumPy array
 
     # Create a dictionary for the DataFrame
     data_dict = {
@@ -155,7 +158,6 @@ def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
     df.to_csv(csv_path, index=False)
 
     return csv_path
-
 
 def load_1d_latent_from_csv(csv_path):
     """Load 1D latent representation from CSV with metadata"""

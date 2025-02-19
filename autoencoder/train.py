@@ -90,7 +90,7 @@ def train_model(config):
             # Store latent representations and image paths
             for idx in range(images.size(0)):
                 image_path = paths[idx]
-                latent_dict[image_path] = latent_1d[idx].detach().cpu().numpy()
+                latent_dict[image_path] = latent_1d[idx].detach().cpu()
 
             # Compute loss and backprop
             loss = criterion_recon(reconstructed, images)
