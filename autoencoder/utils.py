@@ -113,79 +113,64 @@ def extract_and_organize(source_path, dataset_name, is_url=False):
     return data_dir
 
 
-
 def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
     """
-    Save 1D latent representation to CSV with metadata in a columnar format.
-    Each latent dimension gets its own column for easy reading and processing.
+    Save 1D latent representation to CSV with metadata.
 
     Args:
         latent_1d: PyTorch tensor containing the latent representation
         image_name: Name of the image file
-        dataset_name: Name of the dataset (e.g., 'MNIST')
+        dataset_name: Name of the dataset
         metadata: Optional dictionary of additional metadata
-
-    Returns:
-        str: Path to the saved CSV file
     """
     data_dir = f"data/{dataset_name}/latent_space"
     os.makedirs(data_dir, exist_ok=True)
     csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
 
-    # Convert latent values to numpy and flatten
-    if isinstance(latent_1d, torch.Tensor):  # Check if it's a tensor
-        latent_values = latent_1d.cpu().numpy().flatten()  # Convert to NumPy array
+    # Convert latent values to numpy and flatten if needed
+    if isinstance(latent_1d, torch.Tensor):
+        latent_values = latent_1d.detach().cpu().numpy().flatten()
     else:
-        latent_values = latent_1d.flatten()  # Assume it's already a NumPy array
+        latent_values = latent_1d.flatten()
 
-    # Create a dictionary for the DataFrame
-    data_dict = {
-        'image_name': [image_name],
-        'timestamp': [datetime.now().isoformat()],
+    # Create DataFrame with metadata and latent values
+    data = {
+        'type': ['metadata'] * (len(metadata) if metadata else 0) + ['latent_values'],
+        'key': (list(metadata.keys()) if metadata else []) + ['values'],
+        'value': (list(metadata.values()) if metadata else []) + [','.join(map(str, latent_values))]
     }
 
-    # Add latent values with proper column names
-    for i, val in enumerate(latent_values):
-        data_dict[f'latent_{i}'] = [val]
-
-    # Add any additional metadata
-    if metadata:
-        for key, value in metadata.items():
-            data_dict[key] = [value]
-
-    # Create DataFrame and save to CSV
-    df = pd.DataFrame(data_dict)
+    df = pd.DataFrame(data)
     df.to_csv(csv_path, index=False)
-
     return csv_path
 
 def load_1d_latent_from_csv(csv_path):
-    """Load 1D latent representation from CSV with metadata"""
-    metadata = {}
-    latent_data = None
-    frequencies = None
+    """
+    Load 1D latent representation from CSV with metadata.
 
-    with open(csv_path, "r") as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            if len(row) == 2:  # Metadata row
-                metadata[row[0]] = row[1]
-            elif row[0] == "frequencies":
-                frequencies = next(reader)  # Read next row for frequencies
-            elif row[0] == "latent_values":
-                latent_data = next(reader)  # Read next row for values
+    Returns:
+        tuple: (latent_tensor, metadata_dict)
+    """
+    try:
+        df = pd.read_csv(csv_path)
 
-    if latent_data is None:
-        raise ValueError("No latent values found in CSV file")
+        # Extract metadata
+        metadata = {}
+        metadata_rows = df[df['type'] == 'metadata']
+        for _, row in metadata_rows.iterrows():
+            metadata[row['key']] = row['value']
 
-    # Convert string values back to float tensor
-    latent_1d = torch.tensor([float(x) for x in latent_data])
+        # Extract latent values
+        latent_row = df[df['type'] == 'latent_values'].iloc[0]
+        latent_values = [float(x) for x in latent_row['value'].split(',')]
 
-    if frequencies is not None:
-        metadata['frequencies'] = torch.tensor([float(x) for x in frequencies])
+        # Convert to tensor
+        latent_tensor = torch.tensor(latent_values)
 
-    return latent_1d, metadata
+        return latent_tensor, metadata
 
+    except Exception as e:
+        raise ValueError(f"Error loading latent values from CSV: {str(e)}")
 
 
 
