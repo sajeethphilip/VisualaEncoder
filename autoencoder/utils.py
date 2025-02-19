@@ -107,7 +107,7 @@ def extract_and_organize(source_path, dataset_name, is_url=False):
                     os.makedirs(dest_dir, exist_ok=True)
 
                 shutil.copy2(src_path, os.path.join(dest_dir, file))
-
+    create_json_config(dest_dir)
     # Cleanup
     shutil.rmtree(temp_dir)
     return data_dir
@@ -770,8 +770,8 @@ def create_json_config(data_dir):
         data_dir (str): The directory containing the organized dataset.
     """
     # Determine input size and number of classes
-    train_dir = os.path.join(data_dir, "train")
-    test_dir = os.path.join(data_dir, "test")
+    train_dir = os.path.join(data_dir, "train/")
+    test_dir = os.path.join(data_dir, "test/")
 
     # Get the first image to determine input size
     first_image_path = None
@@ -790,7 +790,7 @@ def create_json_config(data_dir):
 
     # Count the number of classes
     num_classes = len(os.listdir(train_dir))
-
+    print(f"Found {num_classes} classes of images")
     # Create JSON configuration
     config = {
         "dataset": {
