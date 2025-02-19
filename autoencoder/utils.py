@@ -191,11 +191,12 @@ def save_checkpoint(model, epoch, loss, config, checkpoint_path):
 
 def load_checkpoint(checkpoint_path, model, config):
     """Load checkpoint with robust frequency handling."""
-    device = model.device
     try:
-        # Load checkpoint
+        # Get device from model's parameters
+        device = next(model.parameters()).device
+
         print(f"Loading checkpoint from {checkpoint_path}")
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        checkpoint = torch.load(checkpoint_path, map_location=device)
 
         # First handle frequencies
         if "frequencies" in checkpoint:
@@ -876,6 +877,8 @@ def reconstruct_image(path, checkpoint_path, dataset_name, config):
 def reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config):
     """Reconstruct images from latent CSV files with robust checkpoint loading."""
     device = get_device()
+    print(f"Using device: {device}")
+
     model = ModifiedAutoencoder(config, device=device).to(device)
 
     print(f"Loading model checkpoint from {checkpoint_path}...")
@@ -913,6 +916,7 @@ def reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config):
 
         except Exception as e:
             print(f"Error processing {csv_file}: {str(e)}")
+            raise  # Re-raise the exception to see the full traceback
 
 
 def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
