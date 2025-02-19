@@ -12,19 +12,21 @@ class CosineLatentMapper(nn.Module):
 
     def _initialize_frequencies(self):
         """Initialize or reinitialize frequencies"""
-        frequencies = torch.tensor([2*math.pi*prime/self.high_dim for prime in self._get_first_n_primes(self.high_dim)])
-        frequencies = frequencies / frequencies.max()  # Normalize to [0,1] range
-        self.register_buffer('frequencies', frequencies.view(self.high_dim, 1))
+        if not hasattr(self, 'frequencies'):
+            frequencies = torch.tensor([2*math.pi*prime/self.high_dim for prime in self._get_first_n_primes(self.high_dim)])
+            frequencies = frequencies / frequencies.max()  # Normalize to [0,1] range
+            self.register_buffer('frequencies', frequencies.view(self.high_dim, 1))
 
     def load_state_dict(self, state_dict, strict=False):
         """Override load_state_dict to handle missing frequencies"""
         if 'frequencies' not in state_dict:
-            print("Frequencies not found in state dict. Initializing new frequencies...")
+            print("Initializing new frequencies for latent mapper...")
             self._initialize_frequencies()
-            # Remove frequencies requirement from state_dict check
+            # Continue loading the rest of the state dict
             super().load_state_dict(state_dict, strict=False)
         else:
             super().load_state_dict(state_dict, strict=strict)
+
 
 
     def _get_first_n_primes(self, n):

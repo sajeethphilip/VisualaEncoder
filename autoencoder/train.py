@@ -35,7 +35,8 @@ def train_model(config):
     device = get_device()
     checkpoint_dir = config["training"]["checkpoint_dir"]
     checkpoint_path = os.path.join(checkpoint_dir, "best_model.pth")
-
+    # Add global image counter for unique latent space saving
+    global_image_counter = 0
     # Initialize model
     model = ModifiedAutoencoder(config, device=device).to(device)
     model, start_epoch, best_loss = load_checkpoint(
@@ -101,9 +102,10 @@ def train_model(config):
 
             # Save latent representation
             with torch.no_grad():
-                for idx, img in enumerate(images):
-                    image_name = f"image_{idx}"
+                for idx in range(images.size(0)):
+                    image_name = f"image_{global_image_counter + idx}"
                     save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"])
+                global_image_counter += images.size(0)
 
             # Compute loss and backprop
             loss = criterion_recon(reconstructed, images)
