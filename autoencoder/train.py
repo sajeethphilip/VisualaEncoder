@@ -35,63 +35,50 @@ def train_model(config):
     device = get_device()
     checkpoint_dir = config["training"]["checkpoint_dir"]
     checkpoint_path = os.path.join(checkpoint_dir, "best_model.pth")
-    # Add global image counter for unique latent space saving
-    global_image_counter = 0
+
     # Initialize model
     model = ModifiedAutoencoder(config, device=device).to(device)
-    model, start_epoch, best_loss = load_checkpoint(
-        checkpoint_path,
-        model,
-        config
-    )
-    model=model.to(device)
-    # Check for existing checkpoint
+
+    # Global image counter for unique latent space saving
+    global_image_counter = 0
     start_epoch = 0
     best_loss = float("inf")
-    if os.path.exists(checkpoint_path):
-        try:
+
+    # Try loading checkpoint, but continue with fresh model if not found
+    try:
+        if os.path.exists(checkpoint_path):
             print(f"Loading existing checkpoint from {checkpoint_path}")
-            checkpoint = torch.load(checkpoint_path, map_location=device)
-            # Load with strict=False to allow missing frequencies
-            model.load_state_dict(checkpoint["model_state_dict"], strict=False)
-            #start_epoch = checkpoint["epoch"]
-            best_loss = checkpoint["loss"]
-            print(f"Resuming from epoch {start_epoch} with best loss: {best_loss:.4f}")
-        except Exception as e:
-            print(f"Error loading checkpoint: {e}")
-            print("Starting fresh training...")
-    # Define optimizer
-    optimizer_config = config["model"]["optimizer"]
-    initial_lr = config["model"]["learning_rate"]
+            model, start_epoch, best_loss = load_checkpoint(checkpoint_path, model, config)
+        else:
+            print("No existing checkpoint found. Starting fresh training...")
+            # Ensure frequencies are initialized for fresh model
+            model.latent_mapper._initialize_frequencies()
+    except Exception as e:
+        print(f"Error loading checkpoint: {e}")
+        print("Starting fresh training...")
+        model.latent_mapper._initialize_frequencies()
+
+    # Training setup
     optimizer = torch.optim.Adam(
         model.parameters(),
-        lr=initial_lr,
-        weight_decay=optimizer_config["weight_decay"],
-        betas=(optimizer_config["beta1"], optimizer_config["beta2"]),
-        eps=optimizer_config["epsilon"]
+        lr=config["model"]["learning_rate"],
+        weight_decay=config["model"]["optimizer"]["weight_decay"],
+        betas=(config["model"]["optimizer"]["beta1"], config["model"]["optimizer"]["beta2"]),
+        eps=config["model"]["optimizer"]["epsilon"]
     )
 
-    # Define loss function
     criterion_recon = nn.MSELoss()
 
     # Training loop
     epochs = config["training"]["epochs"]
     patience = config["training"]["early_stopping"]["patience"]
     patience_counter = 0
-    previous_loss = float("inf")
 
-    epoch = start_epoch
-    while True:
-        if epochs > 0 and epoch >= epochs:
-            break
-
+    for epoch in range(start_epoch, epochs):
         model.train()
         epoch_loss = 0.0
-        progress_bar = tqdm(
-            train_loader,
-            desc=f"Epoch {epoch + 1}/{epochs if epochs > 0 else 'inf'}",
-            leave=False
-        )
+
+        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
 
         for batch in progress_bar:
             images, _ = batch
@@ -100,25 +87,25 @@ def train_model(config):
             # Forward pass
             reconstructed, latent_1d = model(images)
 
+            # Verify latent dimensions before saving
+            if latent_1d.shape[1] != 512:
+                print(f"Warning: Unexpected latent dimension {latent_1d.shape[1]}, reinitializing model...")
+                model = ModifiedAutoencoder(config, device=device).to(device)
+                model.latent_mapper._initialize_frequencies()
+                continue
+
             # Save latent representation
-            # In the training loop, modify latent saving:
             with torch.no_grad():
                 for idx in range(images.size(0)):
                     image_name = f"image_{global_image_counter + idx}"
-                    latent_tensor = latent_1d[idx]
-
-                    # Verify dimensions
-                    if latent_tensor.shape[0] != 512:
-                        raise ValueError(f"Expected 512-dim latent space, got {latent_tensor.shape[0]}")
-
                     metadata = {
                         "batch": epoch,
                         "index": global_image_counter + idx,
-                        "timestamp": datetime.now().isoformat(),
-                        "latent_dim": latent_tensor.shape[0]  # Add dimension info to metadata
+                        "timestamp": datetime.now().isoformat()
                     }
                     save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"], metadata)
-                global_image_counter += images.size(0)
+
+            global_image_counter += images.size(0)
 
 
             # Compute loss and backprop
