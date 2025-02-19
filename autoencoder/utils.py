@@ -110,21 +110,33 @@ def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
     """Save 1D latent representation to CSV with metadata"""
     data_dir = f"data/{dataset_name}/latent_space"
     os.makedirs(data_dir, exist_ok=True)
-
     csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
+
     with open(csv_path, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
+
         # Save metadata
         writer.writerow(["image_name", image_name])
         writer.writerow(["timestamp", datetime.now().isoformat()])
+
         # Save frequencies if available
         if hasattr(latent_1d, 'frequencies'):
             writer.writerow(["frequencies"])
-            writer.writerow(latent_1d.frequencies.detach().cpu().numpy().flatten())
-        # Save latent values
+            writer.writerow(latent_1d.frequencies.detach().cpu().numpy().flatten().tolist())
+
+        # Save all latent values
         writer.writerow(["latent_values"])
-        writer.writerow(latent_1d.detach().cpu().numpy().flatten())
+        # Convert the entire latent tensor to a list of values
+        latent_values = latent_1d.detach().cpu().numpy().flatten().tolist()
+        writer.writerow(latent_values)
+
+        # Save additional metadata if provided
+        if metadata:
+            for key, value in metadata.items():
+                writer.writerow([key, value])
+
     return csv_path
+
 
 def load_1d_latent_from_csv(csv_path):
     """Load 1D latent representation from CSV with metadata"""
@@ -145,11 +157,14 @@ def load_1d_latent_from_csv(csv_path):
     if latent_data is None:
         raise ValueError("No latent values found in CSV file")
 
+    # Convert string values back to float tensor
     latent_1d = torch.tensor([float(x) for x in latent_data])
+
     if frequencies is not None:
         metadata['frequencies'] = torch.tensor([float(x) for x in frequencies])
 
-    return latent_1d.unsqueeze(0), metadata
+    return latent_1d, metadata
+
 
 
 
