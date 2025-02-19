@@ -20,7 +20,7 @@ def create_default_json_config(dataset_name, data_dir, image_path):
     learning_rate = float(input("Enter the learning rate (default: 0.001): ") or 0.001)
     batch_size = int(input("Enter the batch size (default: 32): ") or 32)
     epochs = int(input("Enter the number of epochs (default: 20): ") or 20)
-
+    classes=len(os.listdir(f"{data_dir}/train"))
     # Create JSON configuration
     config = {
         "dataset": {
