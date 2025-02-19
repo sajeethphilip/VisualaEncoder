@@ -39,6 +39,14 @@ import numpy as np
 from PIL import Image
 import shutil
 
+import os
+from tqdm.auto import tqdm
+import torch
+from torchvision import transforms
+from PIL import Image
+from autoencoder.model import ModifiedAutoencoder
+
+
 def find_first_image(directory):
     """Find the first image file in a directory or its subdirectories."""
     for root, _, files in os.walk(directory):
@@ -106,32 +114,30 @@ def extract_and_organize(source_path, dataset_name, is_url=False):
 
 
 
-def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None, mode="train"):
+def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
     """
-    Save 1D latent representation to CSV with metadata, optimized for both training and prediction.
+    Save 1D latent representation to CSV with metadata in a columnar format.
+    Each latent dimension gets its own column for easy reading and processing.
 
     Args:
         latent_1d: PyTorch tensor containing the latent representation
-        image_name: Name/identifier of the image
-        dataset_name: Name of the dataset
+        image_name: Name of the image file
+        dataset_name: Name of the dataset (e.g., 'MNIST')
         metadata: Optional dictionary of additional metadata
-        mode: Either "train" or "predict" to handle different saving strategies
+
+    Returns:
+        str: Path to the saved CSV file
     """
-    # Standardize base directory structure
     data_dir = f"data/{dataset_name}/latent_space"
     os.makedirs(data_dir, exist_ok=True)
-
-    # Create a standardized filename that's consistent across epochs
-    # Remove any epoch-specific information from image_name
-    base_name = image_name.split('_')[0] if '_' in image_name else image_name
-    csv_path = os.path.join(data_dir, f"{base_name}_latent.csv")
+    csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
 
     # Convert latent values to numpy and flatten
     latent_values = latent_1d.detach().cpu().numpy().flatten()
 
-    # Create base data dictionary
+    # Create a dictionary for the DataFrame
     data_dict = {
-        'image_name': [base_name],
+        'image_name': [image_name],
         'timestamp': [datetime.now().isoformat()],
     }
 
@@ -142,16 +148,11 @@ def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None, mo
     # Add any additional metadata
     if metadata:
         for key, value in metadata.items():
-            if key != 'epoch':  # Skip epoch information in training mode
-                data_dict[key] = [value]
+            data_dict[key] = [value]
 
-    # Create DataFrame
+    # Create DataFrame and save to CSV
     df = pd.DataFrame(data_dict)
-
-    # In training mode, we'll overwrite existing files
-    # In predict mode, we'll create new files if they don't exist
-    if mode == "train" or not os.path.exists(csv_path):
-        df.to_csv(csv_path, index=False)
+    df.to_csv(csv_path, index=False)
 
     return csv_path
 
@@ -186,124 +187,81 @@ def load_1d_latent_from_csv(csv_path):
 
 
 
-import os
-import torch
-import json
-from datetime import datetime
-
 def save_checkpoint(model, epoch, loss, config, checkpoint_path):
-    """Save checkpoint with robust error handling and path verification."""
-    try:
-        # Ensure the checkpoint directory exists
-        os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
+    """Save checkpoint with explicit frequency handling."""
+    # Ensure model is in eval mode and on CPU for saving
+    model.eval()
+    model = model.cpu()
 
-        # Verify write permissions
-        checkpoint_dir = os.path.dirname(checkpoint_path)
-        if not os.access(checkpoint_dir, os.W_OK):
-            raise PermissionError(f"No write permission for directory: {checkpoint_dir}")
+    # Verify frequencies exist and initialize if needed
+    if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
+        print("Initializing frequencies before saving...")
+        # Assuming latent_mapper has the initialization method
+        model.latent_mapper._initialize_frequencies()
 
-        # Create a temporary checkpoint path
-        temp_checkpoint_path = checkpoint_path + '.tmp'
+    # Create state dict with explicit frequency saving
+    state_dict = model.state_dict()
 
-        # Ensure model is in eval mode for consistent state
-        model.eval()
+    # Verify frequencies are in state dict
+    if 'latent_mapper.frequencies' not in state_dict:
+        state_dict['latent_mapper.frequencies'] = model.latent_mapper.frequencies
 
-        # Verify frequencies exist
-        if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
-            raise ValueError("Model frequencies not initialized")
+    # Save complete checkpoint
+    checkpoint = {
+        "epoch": epoch,
+        "model_state_dict": state_dict,
+        "frequencies": model.latent_mapper.frequencies,  # Save frequencies separately as well
+        "loss": loss,
+        "config": config
+    }
 
-        # Create complete checkpoint with explicit frequency saving
-        checkpoint = {
-            "epoch": epoch,
-            "model_state_dict": model.state_dict(),
-            "frequencies": model.latent_mapper.frequencies.cpu(),  # Explicitly save frequencies
-            "loss": loss,
-            "config": config,
-            "timestamp": datetime.now().isoformat()
-        }
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
 
-        # Save to temporary file first
-        torch.save(checkpoint, temp_checkpoint_path)
+    # Save checkpoint
+    torch.save(checkpoint, checkpoint_path)
+    print(f"Saved checkpoint to {checkpoint_path} with frequencies shape: {model.latent_mapper.frequencies.shape}")
 
-        # Verify the temporary file exists and has size > 0
-        if not os.path.exists(temp_checkpoint_path) or os.path.getsize(temp_checkpoint_path) == 0:
-            raise IOError("Failed to save temporary checkpoint file")
-
-        # Rename temporary file to final checkpoint file
-        if os.path.exists(checkpoint_path):
-            os.rename(checkpoint_path, checkpoint_path + '.bak')  # Create backup of existing checkpoint
-        os.rename(temp_checkpoint_path, checkpoint_path)
-
-        # Clean up old backup if everything succeeded
-        if os.path.exists(checkpoint_path + '.bak'):
-            os.remove(checkpoint_path + '.bak')
-
-        # Verify the final checkpoint exists and has correct size
-        if not os.path.exists(checkpoint_path) or os.path.getsize(checkpoint_path) == 0:
-            raise IOError("Failed to save final checkpoint file")
-
-        print(f"Successfully saved checkpoint to {checkpoint_path}")
-        print(f"Checkpoint size: {os.path.getsize(checkpoint_path)} bytes")
-        print(f"Frequencies shape: {model.latent_mapper.frequencies.shape}")
-
-        # Save a JSON metadata file with checkpoint info
-        metadata = {
-            "checkpoint_path": checkpoint_path,
-            "epoch": epoch,
-            "loss": float(loss),  # Convert to float for JSON serialization
-            "timestamp": datetime.now().isoformat(),
-            "frequencies_shape": list(model.latent_mapper.frequencies.shape)
-        }
-
-        metadata_path = checkpoint_path + '.json'
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata, f, indent=4)
-
-        return True
-
-    except Exception as e:
-        print(f"Error saving checkpoint: {str(e)}")
-        # If temporary file exists, clean it up
-        if os.path.exists(temp_checkpoint_path):
-            os.remove(temp_checkpoint_path)
-        return False
 
 def load_checkpoint(checkpoint_path, model, config):
-    """Load checkpoint with robust error handling and verification."""
+    """Load checkpoint with robust frequency handling."""
     try:
-        if not os.path.exists(checkpoint_path):
-            raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
+        # Get device from model's parameters
+        device = next(model.parameters()).device
 
-        # Load checkpoint file
-        checkpoint = torch.load(checkpoint_path, map_location=model.device)
+        print(f"Loading checkpoint from {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=device)
 
-        # Verify checkpoint contents
-        required_keys = ["model_state_dict", "frequencies", "epoch", "loss"]
-        for key in required_keys:
-            if key not in checkpoint:
-                raise KeyError(f"Missing required key in checkpoint: {key}")
-
-        # Load frequencies first
-        if checkpoint["frequencies"] is not None:
-            model.latent_mapper.frequencies = checkpoint["frequencies"].to(model.device)
+        # First handle frequencies
+        if "frequencies" in checkpoint:
+            print("Loading frequencies from checkpoint...")
+            model.latent_mapper.frequencies = checkpoint["frequencies"].to(device)
         else:
-            raise ValueError("Frequencies not found in checkpoint")
+            print("No frequencies found in checkpoint, initializing...")
+            model.latent_mapper._initialize_frequencies()
+
+        # Clean state dict
+        state_dict = checkpoint["model_state_dict"]
+        cleaned_state_dict = {}
+
+        for k, v in state_dict.items():
+            # Remove any 'module.' prefix from DataParallel
+            name = k.replace('module.', '')
+            cleaned_state_dict[name] = v
+
+        # Ensure frequencies are in state dict
+        if 'latent_mapper.frequencies' not in cleaned_state_dict:
+            cleaned_state_dict['latent_mapper.frequencies'] = model.latent_mapper.frequencies
 
         # Load state dict
-        model.load_state_dict(checkpoint["model_state_dict"])
+        model.load_state_dict(cleaned_state_dict, strict=True)
 
-        # Verify frequencies were loaded correctly
-        if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
-            raise RuntimeError("Frequencies not properly loaded from checkpoint")
-
-        print(f"Successfully loaded checkpoint from {checkpoint_path}")
-        print(f"Loaded frequencies shape: {model.latent_mapper.frequencies.shape}")
-
-        return model, checkpoint["epoch"], checkpoint["loss"]
+        print(f"Successfully loaded checkpoint with frequencies shape: {model.latent_mapper.frequencies.shape}")
+        return model, checkpoint.get("epoch", 0), checkpoint.get("loss", float("inf"))
 
     except Exception as e:
-        print(f"Error loading checkpoint: {str(e)}")
-        print("Initializing fresh model...")
+        print(f"Error loading checkpoint: {e}")
+        print("Initializing fresh model with new frequencies...")
         model.latent_mapper._initialize_frequencies()
         return model, 0, float("inf")
 
@@ -817,14 +775,6 @@ def postprocess_image(image_tensor):
     return imagem(image).unsqueeze(0)  # Add batch dimension
     return image_tensor
 
-import os
-from tqdm.auto import tqdm
-import torch
-from torchvision import transforms
-from PIL import Image
-from autoencoder.model import ModifiedAutoencoder
-from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv
-from autoencoder.data_loader import load_dataset_config
 
 
 def load_model(checkpoint_path, device):
@@ -1050,41 +1000,39 @@ def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
                 except Exception as e:
                     print(f"Error processing {input_path}: {str(e)}")
 
-def process_image(model, image_path, dataset_name, config):
-    """Process a single image and save its latent representation."""
-    device = get_device()
-    image_tensor = preprocess_image(image_path, device, config)
 
-    with torch.no_grad():
-        reconstructed, latent_1d = model(image_tensor)
+def load_local_dataset(dataset_name, transform=None):
+    """Load a dataset from a local directory."""
+    # Load config first
+    config = load_dataset_config(dataset_name)
 
-        # Create a consistent image identifier from the filename
-        image_name = os.path.splitext(os.path.basename(image_path))[0]
+    if transform is None:
+        # Use dataset-specific normalization from config
+        transform_list = []
 
-        # Save latent representation
-        metadata = {
-            "source_image": image_path,
-            "processing_time": datetime.now().isoformat()
-        }
+        # Only apply grayscale transformation if in_channels is 1
+        if config['in_channels'] == 1:
+            transform_list.append(transforms.Grayscale(num_output_channels=1))
 
-        # Save with predict mode
-        save_1d_latent_to_csv(
-            latent_1d[0],  # Take first item as we process one image
-            image_name,
-            dataset_name,
-            metadata,
-            mode="predict"
-        )
+        # Add ToTensor and Normalize transformations
+        transform_list.extend([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=config['mean'], std=config['std'])
+        ])
 
-        return reconstructed
+        transform = transforms.Compose(transform_list)
 
-def process_directory(model, input_dir, dataset_name, config):
-    """Process all images in a directory and save their latent representations."""
-    for root, _, files in os.walk(input_dir):
-        for file in tqdm(files):
-            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                input_path = os.path.join(root, file)
-                process_image(model, input_path, dataset_name, config)
+    data_dir = f"data/{dataset_name}/train/"
+    dataset = datasets.ImageFolder(root=data_dir, transform=transform)
+    return dataset
+
+def load_dataset_config(dataset_name):
+    """Load dataset configuration from JSON file."""
+    config_path = f"data/{dataset_name}/{dataset_name}.json"
+    with open(config_path, "r") as f:
+        config = json.load(f)
+    return config["dataset"]
+
 
 # Example usage
 if __name__ == "__main__":

@@ -5,21 +5,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
-from autoencoder.model import Autoencoder
-from autoencoder.data_loader import load_local_dataset, load_dataset_config
-from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv,save_checkpoint,load_checkpoint
+from autoencoder.model import Autoencoder,ModifiedAutoencoder
+from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv,save_checkpoint,load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv
 from datetime import datetime
 from tqdm import tqdm
-
-import os
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-from autoencoder.model import ModifiedAutoencoder
-from autoencoder.data_loader import load_local_dataset
-from autoencoder.utils import get_device, save_1d_latent_to_csv
 
 def train_model(config):
     """Train the autoencoder model using the provided configuration."""
@@ -72,7 +61,7 @@ def train_model(config):
     criterion_recon = nn.MSELoss()
 
     # Training loop
-    epochs = config["training"]["epochs"] +start_epoch   # Always let there be epoch more counts to go.
+    epochs = config["training"]["epochs"] + start_epoch   # Always let there be epoch more counts to go.
     patience = config["training"]["early_stopping"]["patience"]
     patience_counter = 0
 
@@ -80,32 +69,28 @@ def train_model(config):
         model.train()
         epoch_loss = 0.0
 
+        # Dictionary to store latent representations and image paths
+        latent_dict = {}
+
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
 
-        for batch_idx, batch in enumerate(progress_bar):
-            images, _ = batch
+        for batch in progress_bar:
+            images, paths = batch  # Assuming the dataset returns image paths
             images = images.to(device)
 
             # Forward pass
             reconstructed, latent_1d = model(images)
 
-            # Save latent representation only if needed
-            if config.get("save_latent_during_training", False):  # Make this configurable
-                # Save latent space for each image in batch
-                for idx in range(images.size(0)):
-                    # Create a consistent image identifier
-                    image_name = f"image_{batch_idx * config['training']['batch_size'] + idx}"
-                    metadata = {
-                        "batch_index": batch_idx,
-                        "global_index": batch_idx * config['training']['batch_size'] + idx
-                    }
-                    save_1d_latent_to_csv(
-                        latent_1d[idx],
-                        image_name,
-                        config["dataset"]["name"],
-                        metadata,
-                        mode="train"
-                    )
+            # Convert paths from tensors to strings if necessary
+            if isinstance(paths, torch.Tensor):
+                paths = [str(path.item()) for path in paths]
+            else:
+                paths = [str(path) for path in paths]
+
+            # Store latent representations and image paths
+            for idx in range(images.size(0)):
+                image_path = paths[idx]
+                latent_dict[image_path] = latent_1d[idx].detach().cpu().numpy()
 
             # Compute loss and backprop
             loss = criterion_recon(reconstructed, images)
@@ -124,6 +109,25 @@ def train_model(config):
         # Calculate average epoch loss
         epoch_loss /= len(train_loader)
         print(f"Epoch [{epoch + 1}/{epochs}], Loss: {epoch_loss:.4f}, Learning Rate: {optimizer.param_groups[0]['lr']:.6f}")
+
+        # Save latent representations at the end of the epoch
+        for image_path, latent in latent_dict.items():
+            # Extract subfolder structure
+            subfolder = os.path.dirname(image_path)
+            image_name = os.path.basename(image_path).split('.')[0]  # Remove file extension
+            csv_filename = f"{image_name}_latent.csv"
+
+            # Create subfolder in the latent space directory if it doesn't exist
+            latent_dir = os.path.join("data", dataset_config["name"], "latent_space", subfolder)
+            os.makedirs(latent_dir, exist_ok=True)
+
+            # Save latent representation to CSV
+            csv_path = os.path.join(latent_dir, csv_filename)
+            metadata = {
+                "epoch": epoch + 1,
+                "timestamp": datetime.now().isoformat()
+            }
+            save_1d_latent_to_csv(latent, image_name, dataset_config["name"], metadata)
 
         # Save checkpoint if loss improved
         if epoch_loss < best_loss:
@@ -153,7 +157,6 @@ def train_model(config):
                 break
 
     print("Training complete.")
-
 
 
 
