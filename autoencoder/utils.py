@@ -107,7 +107,7 @@ def extract_and_organize(source_path, dataset_name, is_url=False):
                     os.makedirs(dest_dir, exist_ok=True)
 
                 shutil.copy2(src_path, os.path.join(dest_dir, file))
-    create_json_config(train_dir)
+    create_json_config(data_dir)
     # Cleanup
     shutil.rmtree(temp_dir)
     return data_dir
