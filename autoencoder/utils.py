@@ -888,7 +888,7 @@ def save_reconstructed_image(original_tensor, reconstructed_tensor, dataset_name
     # Save the image
     image_path = os.path.join(recon_dir, filename)
     output_image.save(image_path)
-    print(f"Image saved to {image_path}")
+    #print(f"Image saved to {image_path}")
 
 def reconstruct_image(path, checkpoint_path, dataset_name, config):
     """Handle both single image and folder reconstruction."""
