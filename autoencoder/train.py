@@ -8,7 +8,7 @@ from tqdm import tqdm
 from autoencoder.model import Autoencoder
 from autoencoder.data_loader import load_local_dataset, load_dataset_config
 from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv,save_checkpoint,load_checkpoint
-
+from datetime import datetime
 from tqdm import tqdm
 
 import os
