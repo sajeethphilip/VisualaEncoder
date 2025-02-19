@@ -179,81 +179,124 @@ def load_1d_latent_from_csv(csv_path):
 
 
 
+import os
+import torch
+import json
+from datetime import datetime
+
 def save_checkpoint(model, epoch, loss, config, checkpoint_path):
-    """Save checkpoint with explicit frequency handling."""
-    # Ensure model is in eval mode and on CPU for saving
-    model.eval()
-    model = model.cpu()
-
-    # Verify frequencies exist and initialize if needed
-    if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
-        print("Initializing frequencies before saving...")
-        # Assuming latent_mapper has the initialization method
-        model.latent_mapper._initialize_frequencies()
-
-    # Create state dict with explicit frequency saving
-    state_dict = model.state_dict()
-
-    # Verify frequencies are in state dict
-    if 'latent_mapper.frequencies' not in state_dict:
-        state_dict['latent_mapper.frequencies'] = model.latent_mapper.frequencies
-
-    # Save complete checkpoint
-    checkpoint = {
-        "epoch": epoch,
-        "model_state_dict": state_dict,
-        "frequencies": model.latent_mapper.frequencies,  # Save frequencies separately as well
-        "loss": loss,
-        "config": config
-    }
-
-    # Create directory if it doesn't exist
-    os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
-
-    # Save checkpoint
-    torch.save(checkpoint, checkpoint_path)
-    print(f"Saved checkpoint to {checkpoint_path} with frequencies shape: {model.latent_mapper.frequencies.shape}")
-
-
-def load_checkpoint(checkpoint_path, model, config):
-    """Load checkpoint with robust frequency handling."""
+    """Save checkpoint with robust error handling and path verification."""
     try:
-        # Get device from model's parameters
-        device = next(model.parameters()).device
+        # Ensure the checkpoint directory exists
+        os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
 
-        print(f"Loading checkpoint from {checkpoint_path}")
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        # Verify write permissions
+        checkpoint_dir = os.path.dirname(checkpoint_path)
+        if not os.access(checkpoint_dir, os.W_OK):
+            raise PermissionError(f"No write permission for directory: {checkpoint_dir}")
 
-        # First handle frequencies
-        if "frequencies" in checkpoint:
-            print("Loading frequencies from checkpoint...")
-            model.latent_mapper.frequencies = checkpoint["frequencies"].to(device)
-        else:
-            print("No frequencies found in checkpoint, initializing...")
-            model.latent_mapper._initialize_frequencies()
+        # Create a temporary checkpoint path
+        temp_checkpoint_path = checkpoint_path + '.tmp'
 
-        # Clean state dict
-        state_dict = checkpoint["model_state_dict"]
-        cleaned_state_dict = {}
+        # Ensure model is in eval mode for consistent state
+        model.eval()
 
-        for k, v in state_dict.items():
-            # Remove any 'module.' prefix from DataParallel
-            name = k.replace('module.', '')
-            cleaned_state_dict[name] = v
+        # Verify frequencies exist
+        if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
+            raise ValueError("Model frequencies not initialized")
 
-        # Ensure frequencies are in state dict
-        if 'latent_mapper.frequencies' not in cleaned_state_dict:
-            cleaned_state_dict['latent_mapper.frequencies'] = model.latent_mapper.frequencies
+        # Create complete checkpoint with explicit frequency saving
+        checkpoint = {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "frequencies": model.latent_mapper.frequencies.cpu(),  # Explicitly save frequencies
+            "loss": loss,
+            "config": config,
+            "timestamp": datetime.now().isoformat()
+        }
 
-        # Load state dict
-        model.load_state_dict(cleaned_state_dict, strict=True)
+        # Save to temporary file first
+        torch.save(checkpoint, temp_checkpoint_path)
 
-        print(f"Successfully loaded checkpoint with frequencies shape: {model.latent_mapper.frequencies.shape}")
-        return model, checkpoint.get("epoch", 0), checkpoint.get("loss", float("inf"))
+        # Verify the temporary file exists and has size > 0
+        if not os.path.exists(temp_checkpoint_path) or os.path.getsize(temp_checkpoint_path) == 0:
+            raise IOError("Failed to save temporary checkpoint file")
+
+        # Rename temporary file to final checkpoint file
+        if os.path.exists(checkpoint_path):
+            os.rename(checkpoint_path, checkpoint_path + '.bak')  # Create backup of existing checkpoint
+        os.rename(temp_checkpoint_path, checkpoint_path)
+
+        # Clean up old backup if everything succeeded
+        if os.path.exists(checkpoint_path + '.bak'):
+            os.remove(checkpoint_path + '.bak')
+
+        # Verify the final checkpoint exists and has correct size
+        if not os.path.exists(checkpoint_path) or os.path.getsize(checkpoint_path) == 0:
+            raise IOError("Failed to save final checkpoint file")
+
+        print(f"Successfully saved checkpoint to {checkpoint_path}")
+        print(f"Checkpoint size: {os.path.getsize(checkpoint_path)} bytes")
+        print(f"Frequencies shape: {model.latent_mapper.frequencies.shape}")
+
+        # Save a JSON metadata file with checkpoint info
+        metadata = {
+            "checkpoint_path": checkpoint_path,
+            "epoch": epoch,
+            "loss": float(loss),  # Convert to float for JSON serialization
+            "timestamp": datetime.now().isoformat(),
+            "frequencies_shape": list(model.latent_mapper.frequencies.shape)
+        }
+
+        metadata_path = checkpoint_path + '.json'
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=4)
+
+        return True
 
     except Exception as e:
-        print(f"Error loading checkpoint: {e}")
-        print("Initializing fresh model with new frequencies...")
+        print(f"Error saving checkpoint: {str(e)}")
+        # If temporary file exists, clean it up
+        if os.path.exists(temp_checkpoint_path):
+            os.remove(temp_checkpoint_path)
+        return False
+
+def load_checkpoint(checkpoint_path, model, config):
+    """Load checkpoint with robust error handling and verification."""
+    try:
+        if not os.path.exists(checkpoint_path):
+            raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
+
+        # Load checkpoint file
+        checkpoint = torch.load(checkpoint_path, map_location=model.device)
+
+        # Verify checkpoint contents
+        required_keys = ["model_state_dict", "frequencies", "epoch", "loss"]
+        for key in required_keys:
+            if key not in checkpoint:
+                raise KeyError(f"Missing required key in checkpoint: {key}")
+
+        # Load frequencies first
+        if checkpoint["frequencies"] is not None:
+            model.latent_mapper.frequencies = checkpoint["frequencies"].to(model.device)
+        else:
+            raise ValueError("Frequencies not found in checkpoint")
+
+        # Load state dict
+        model.load_state_dict(checkpoint["model_state_dict"])
+
+        # Verify frequencies were loaded correctly
+        if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
+            raise RuntimeError("Frequencies not properly loaded from checkpoint")
+
+        print(f"Successfully loaded checkpoint from {checkpoint_path}")
+        print(f"Loaded frequencies shape: {model.latent_mapper.frequencies.shape}")
+
+        return model, checkpoint["epoch"], checkpoint["loss"]
+
+    except Exception as e:
+        print(f"Error loading checkpoint: {str(e)}")
+        print("Initializing fresh model...")
         model.latent_mapper._initialize_frequencies()
         return model, 0, float("inf")
 
