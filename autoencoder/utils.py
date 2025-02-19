@@ -126,12 +126,15 @@ def save_1d_latent_to_csv(latent_1d, image_path, dataset_name, metadata=None):
     # Create base latent space directory
     base_latent_dir = f"data/{dataset_name}/latent_space"
 
-    # Get relative path from the original image
-    base_data_dir = f"data/{dataset_name}"
-    rel_path = os.path.relpath(image_path, base_data_dir)
+    # Get the relative path from the dataset directory to maintain hierarchy
+    base_data_dir = os.path.abspath(f"data/{dataset_name}")
+    abs_image_path = os.path.abspath(image_path)
 
-    # Create the target directory structure
+    # Extract relative path while preserving class structure
+    rel_path = os.path.relpath(abs_image_path, base_data_dir)
     target_dir = os.path.join(base_latent_dir, os.path.dirname(rel_path))
+
+    # Create all necessary directories
     os.makedirs(target_dir, exist_ok=True)
 
     # Create the CSV filename with the same basename as the image
@@ -148,12 +151,36 @@ def save_1d_latent_to_csv(latent_1d, image_path, dataset_name, metadata=None):
     data = {
         'type': ['metadata'] * (len(metadata) if metadata else 0) + ['latent_values'],
         'key': (list(metadata.keys()) if metadata else []) + ['values'],
-        'value': (list(metadata.values()) if metadata else []) + [','.join(map(str, latent_values))]
+        'value': (list(map(str, metadata.values())) if metadata else []) + [','.join(map(str, latent_values))]
     }
 
     df = pd.DataFrame(data)
     df.to_csv(csv_path, index=False)
     return csv_path
+
+def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=None):
+    """
+    Save latent representations for a batch of images while maintaining folder hierarchy.
+
+    Args:
+        batch_latents: Tensor of latent representations (batch_size x latent_dim)
+        image_paths: List of paths to original images
+        dataset_name: Name of the dataset
+        batch_metadata: Optional dictionary of metadata for the batch
+    """
+    for idx, (latent, path) in enumerate(zip(batch_latents, image_paths)):
+        # Create metadata for this specific image
+        metadata = {
+            'batch_idx': idx,
+            'timestamp': datetime.now().isoformat()
+        }
+
+        # Add any batch-level metadata
+        if batch_metadata:
+            metadata.update(batch_metadata)
+
+        # Save individual latent representation
+        save_1d_latent_to_csv(latent, path, dataset_name, metadata)
 
 def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
     """

@@ -6,7 +6,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from autoencoder.model import Autoencoder,ModifiedAutoencoder
-from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv,save_checkpoint,load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv
+from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv,save_checkpoint
+from autoencoder.utils import  load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv,save_batch_latents
 from datetime import datetime
 from tqdm import tqdm
 
@@ -108,6 +109,16 @@ def train_model(config):
             # Forward pass
             reconstructed, latent_1d = model(images)
 
+            # Save latent representations for the batch
+            batch_metadata = {
+                'epoch': epoch + 1,
+                'batch': batch_idx,
+                'timestamp': datetime.now().isoformat()
+            }
+
+            # Save latents for all images in the batch
+            save_batch_latents(latent_1d, full_paths, train_dataset, batch_metadata)
+            '''
             # Save latent representations for each image in the batch
             for idx, full_path in enumerate(full_paths):
                 metadata = {
@@ -124,7 +135,7 @@ def train_model(config):
                     )
                 except Exception as e:
                     print(f"Error saving latent space for {full_path}: {str(e)}")
-
+            '''
             # Compute loss and backprop
             loss = criterion_recon(reconstructed, images)
             optimizer.zero_grad()
