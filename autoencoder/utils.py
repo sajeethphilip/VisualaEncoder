@@ -114,14 +114,13 @@ def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
     csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
     with open(csv_path, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
-        # Save metadata if provided
-        if metadata:
-            for key, value in metadata.items():
-                writer.writerow([key, value])
-        # Save timestamp
-        writer.writerow(["timestamp", datetime.now().isoformat()])
-        # Save image name
+        # Save metadata
         writer.writerow(["image_name", image_name])
+        writer.writerow(["timestamp", datetime.now().isoformat()])
+        # Save frequencies if available
+        if hasattr(latent_1d, 'frequencies'):
+            writer.writerow(["frequencies"])
+            writer.writerow(latent_1d.frequencies.detach().cpu().numpy().flatten())
         # Save latent values
         writer.writerow(["latent_values"])
         writer.writerow(latent_1d.detach().cpu().numpy().flatten())
@@ -131,21 +130,28 @@ def load_1d_latent_from_csv(csv_path):
     """Load 1D latent representation from CSV with metadata"""
     metadata = {}
     latent_data = None
+    frequencies = None
 
     with open(csv_path, "r") as csvfile:
         reader = csv.reader(csvfile)
         for row in reader:
             if len(row) == 2:  # Metadata row
                 metadata[row[0]] = row[1]
+            elif row[0] == "frequencies":
+                frequencies = next(reader)  # Read next row for frequencies
             elif row[0] == "latent_values":
                 latent_data = next(reader)  # Read next row for values
-                break
 
     if latent_data is None:
         raise ValueError("No latent values found in CSV file")
 
     latent_1d = torch.tensor([float(x) for x in latent_data])
-    return latent_1d.unsqueeze(0), metadata  # Return both latent and metadata
+    if frequencies is not None:
+        metadata['frequencies'] = torch.tensor([float(x) for x in frequencies])
+
+    return latent_1d.unsqueeze(0), metadata
+
+
 
 def save_checkpoint(model, epoch, loss, config, checkpoint_path):
     """Save checkpoint with device-agnostic state dict and frequencies"""
@@ -160,17 +166,14 @@ def save_checkpoint(model, epoch, loss, config, checkpoint_path):
         model.latent_mapper._initialize_frequencies()
         state_dict = model.state_dict()
 
-    # Save checkpoint
+    # Save checkpoint with complete state
     torch.save({
         "epoch": epoch,
         "model_state_dict": state_dict,
+        "frequencies": model.latent_mapper.frequencies,  # Save frequencies separately
         "loss": loss,
         "config": config
     }, checkpoint_path)
-
-    # Move model back to original device
-    device = get_device()
-    model = model.to(device)
 
     print(f"Saved checkpoint to {checkpoint_path}")
 
@@ -856,41 +859,40 @@ def reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config):
     model = ModifiedAutoencoder(config, device=device).to(device)
 
     print(f"Loading model checkpoint from {checkpoint_path}...")
-    try:
-        # Load checkpoint with saved frequencies
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device)
 
-        # Load state dict with strict=True to ensure frequencies are loaded
-        model.load_state_dict(checkpoint["model_state_dict"], strict=True)
-        model.eval()
+    # First load the frequencies if available
+    if "frequencies" in checkpoint:
+        model.latent_mapper.frequencies = checkpoint["frequencies"].to(device)
 
-        # Process single file or directory
-        if os.path.isfile(csv_path):
-            files = [csv_path]
-        else:
-            files = [f for f in os.listdir(csv_path) if f.endswith('_latent.csv')]
-            files = [os.path.join(csv_path, f) for f in files]
+    # Then load the rest of the model state
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
 
-        for csv_file in tqdm(files, desc="Reconstructing from latent representations"):
-            try:
-                # Load latent representation
-                latent_1d = load_1d_latent_from_csv(csv_file).to(device)
+    # Process files
+    if os.path.isfile(csv_path):
+        files = [csv_path]
+    else:
+        files = [f for f in os.listdir(csv_path) if f.endswith('_latent.csv')]
+        files = [os.path.join(csv_path, f) for f in files]
 
-                # Use saved frequencies for reconstruction
-                with torch.no_grad():
-                    decoded_flat = model.latent_mapper.inverse_map(latent_1d)
-                    decoded_volume = decoded_flat.view(1, 512, 1, 1)
-                    reconstructed = model.decoder(decoded_volume)
-                    reconstructed = model.adaptive_upsample(reconstructed)
+    for csv_file in tqdm(files, desc="Reconstructing from latent representations"):
+        try:
+            latent_data, metadata = load_1d_latent_from_csv(csv_file)
+            latent_1d = latent_data.to(device)
 
-                output_name = os.path.basename(csv_file).replace('_latent.csv', '_reconstructed.png')
-                save_reconstructed_image(None, reconstructed, dataset_name, output_name)
+            with torch.no_grad():
+                decoded_flat = model.latent_mapper.inverse_map(latent_1d)
+                decoded_volume = decoded_flat.view(1, 512, 1, 1)
+                reconstructed = model.decoder(decoded_volume)
+                reconstructed = model.adaptive_upsample(reconstructed)
 
-            except Exception as e:
-                print(f"Error processing {csv_file}: {str(e)}")
-    except Exception as e:
-        print(f"Error loading checkpoint: {str(e)}")
-        raise
+            output_name = os.path.basename(csv_file).replace('_latent.csv', '_reconstructed.png')
+            save_reconstructed_image(None, reconstructed, dataset_name, output_name)
+
+        except Exception as e:
+            print(f"Error processing {csv_file}: {str(e)}")
+
 
 
 
