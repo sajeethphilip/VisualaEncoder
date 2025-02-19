@@ -249,14 +249,17 @@ def load_checkpoint(checkpoint_path, model, config):
         for k, v in state_dict.items():
             # Remove any 'module.' prefix from DataParallel
             name = k.replace('module.', '')
-            cleaned_state_dict[name] = v
+            cleaned_state_dict[name] = v.to(device)  # Ensure weights are on the correct device
 
         # Ensure frequencies are in state dict
         if 'latent_mapper.frequencies' not in cleaned_state_dict:
-            cleaned_state_dict['latent_mapper.frequencies'] = model.latent_mapper.frequencies
+            cleaned_state_dict['latent_mapper.frequencies'] = model.latent_mapper.frequencies.to(device)
 
         # Load state dict
         model.load_state_dict(cleaned_state_dict, strict=True)
+
+        # Ensure the model is on the correct device
+        model = model.to(device)
 
         print(f"Successfully loaded checkpoint with frequencies shape: {model.latent_mapper.frequencies.shape}")
         return model, checkpoint.get("epoch", 0), checkpoint.get("loss", float("inf"))
