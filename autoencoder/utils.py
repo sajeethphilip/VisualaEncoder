@@ -119,23 +119,18 @@ def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
         writer.writerow(["image_name", image_name])
         writer.writerow(["timestamp", datetime.now().isoformat()])
 
-        # Save frequencies if available
-        if hasattr(latent_1d, 'frequencies'):
-            writer.writerow(["frequencies"])
-            writer.writerow(latent_1d.frequencies.detach().cpu().numpy().flatten().tolist())
-
-        # Save all latent values
+        # Save latent values - ensure we get all 512 values
         writer.writerow(["latent_values"])
-        # Convert the entire latent tensor to a list of values
-        latent_values = latent_1d.detach().cpu().numpy().flatten().tolist()
+        latent_values = latent_1d.detach().cpu().numpy().flatten()
         writer.writerow(latent_values)
 
-        # Save additional metadata if provided
+        # Save additional metadata
         if metadata:
             for key, value in metadata.items():
                 writer.writerow([key, value])
 
     return csv_path
+
 
 
 def load_1d_latent_from_csv(csv_path):
