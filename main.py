@@ -27,7 +27,7 @@ def create_default_json_config(dataset_name, data_dir, image_path):
             "name": dataset_name,
             "type": "custom",
             "in_channels": in_channels,
-            "num_classes": 0,  # Update if class labels are available
+            "num_classes": classes,  # Update if class labels are available
             "input_size": [height, width],  # Height x Width
             "mean": [0.5] * in_channels,  # Default mean
             "std": [0.5] * in_channels,  # Default std
