@@ -24,11 +24,11 @@ def train_model(config):
         shuffle=True
     )
 
-    device = get_device()
+    device = get_device()  # Get the device (CPU or GPU)
     checkpoint_dir = config["training"]["checkpoint_dir"]
     checkpoint_path = os.path.join(checkpoint_dir, "best_model.pth")
 
-    # Initialize model
+    # Initialize model and move it to the correct device
     model = ModifiedAutoencoder(config, device=device).to(device)
 
     # Global image counter for unique latent space saving
@@ -41,6 +41,8 @@ def train_model(config):
         if os.path.exists(checkpoint_path):
             print(f"Loading existing checkpoint from {checkpoint_path}")
             model, start_epoch, best_loss = load_checkpoint(checkpoint_path, model, config)
+            # Ensure the model is on the correct device after loading the checkpoint
+            model = model.to(device)
         else:
             print("No existing checkpoint found. Starting fresh training...")
             model.latent_mapper._initialize_frequencies()
@@ -76,7 +78,7 @@ def train_model(config):
 
         for batch in progress_bar:
             images, paths = batch  # Assuming the dataset returns image paths
-            images = images.to(device)
+            images = images.to(device)  # Move input images to the correct device
 
             # Forward pass
             reconstructed, latent_1d = model(images)
@@ -90,7 +92,7 @@ def train_model(config):
             # Store latent representations and image paths
             for idx in range(images.size(0)):
                 image_path = paths[idx]
-                latent_dict[image_path] = latent_1d[idx].detach().cpu()
+                latent_dict[image_path] = latent_1d[idx].detach().cpu()  # Store as CPU tensor
 
             # Compute loss and backprop
             loss = criterion_recon(reconstructed, images)
@@ -157,7 +159,6 @@ def train_model(config):
                 break
 
     print("Training complete.")
-
 
 
 def save_final_representations(model, loader, device, dataset_name):
