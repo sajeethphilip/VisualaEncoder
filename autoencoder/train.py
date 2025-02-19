@@ -105,10 +105,17 @@ def train_model(config):
             with torch.no_grad():
                 for idx in range(images.size(0)):
                     image_name = f"image_{global_image_counter + idx}"
+                    latent_tensor = latent_1d[idx]
+
+                    # Verify dimensions
+                    if latent_tensor.shape[0] != 512:
+                        raise ValueError(f"Expected 512-dim latent space, got {latent_tensor.shape[0]}")
+
                     metadata = {
                         "batch": epoch,
                         "index": global_image_counter + idx,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": datetime.now().isoformat(),
+                        "latent_dim": latent_tensor.shape[0]  # Add dimension info to metadata
                     }
                     save_1d_latent_to_csv(latent_1d[idx], image_name, config["dataset"]["name"], metadata)
                 global_image_counter += images.size(0)

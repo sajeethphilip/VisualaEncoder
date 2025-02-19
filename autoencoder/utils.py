@@ -107,30 +107,46 @@ def extract_and_organize(source_path, dataset_name, is_url=False):
 
 
 def save_1d_latent_to_csv(latent_1d, image_name, dataset_name, metadata=None):
-    """Save 1D latent representation to CSV with metadata"""
+    """
+    Save 1D latent representation to CSV with metadata in a columnar format.
+    Each latent dimension gets its own column for easy reading and processing.
+
+    Args:
+        latent_1d: PyTorch tensor containing the latent representation
+        image_name: Name of the image file
+        dataset_name: Name of the dataset (e.g., 'MNIST')
+        metadata: Optional dictionary of additional metadata
+
+    Returns:
+        str: Path to the saved CSV file
+    """
     data_dir = f"data/{dataset_name}/latent_space"
     os.makedirs(data_dir, exist_ok=True)
     csv_path = os.path.join(data_dir, f"{image_name}_latent.csv")
 
-    with open(csv_path, "w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
+    # Convert latent values to numpy and flatten
+    latent_values = latent_1d.detach().cpu().numpy().flatten()
 
-        # Save metadata
-        writer.writerow(["image_name", image_name])
-        writer.writerow(["timestamp", datetime.now().isoformat()])
+    # Create a dictionary for the DataFrame
+    data_dict = {
+        'image_name': [image_name],
+        'timestamp': [datetime.now().isoformat()],
+    }
 
-        # Save latent values - ensure we get all 512 values
-        writer.writerow(["latent_values"])
-        latent_values = latent_1d.detach().cpu().numpy().flatten()
-        writer.writerow(latent_values)
+    # Add latent values with proper column names
+    for i, val in enumerate(latent_values):
+        data_dict[f'latent_{i}'] = [val]
 
-        # Save additional metadata
-        if metadata:
-            for key, value in metadata.items():
-                writer.writerow([key, value])
+    # Add any additional metadata
+    if metadata:
+        for key, value in metadata.items():
+            data_dict[key] = [value]
+
+    # Create DataFrame and save to CSV
+    df = pd.DataFrame(data_dict)
+    df.to_csv(csv_path, index=False)
 
     return csv_path
-
 
 
 def load_1d_latent_from_csv(csv_path):
