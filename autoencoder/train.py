@@ -14,19 +14,23 @@ from tqdm import tqdm
 def train_model(config):
     """Train the autoencoder model with clean display and class-wise latent generation."""
     
-    # Get terminal size
-    import os
+    # Get terminal size and reserve space for header
     terminal_size = os.get_terminal_size()
     terminal_height = terminal_size.lines
-
+    header_height = 8  # Reserve space for header
+    
     # Display header (stays at top)
     print("\033[2J\033[H")  # Clear screen
-    print("="*80)
-    print("Visual Autoencoder Tool".center(80))
-    print("="*80)
-    print("Author: Ninan Sajeeth Philip".center(80))
-    print("AIRIS, Thelliyoor".center(80))
-    print("="*80)
+    print("\033[96m" + "="*80 + "\033[0m")
+    print("\033[93m" + "Visual Autoencoder Tool".center(80) + "\033[0m")
+    print("\033[96m" + "="*80 + "\033[0m")
+    print("\033[97m" + "Author: ".rjust(40) + "\033[93m" + "Ninan Sajeeth Philip" + "\033[0m")
+    print("\033[97m" + "Organisation: ".rjust(40) + "\033[92m" + "AIRIS" + "\033[0m")
+    print("\033[92m" + "Thelliyoor".rjust(40) + "\033[0m")
+    print("\033[96m" + "="*80 + "\033[0m")
+    
+    # Move cursor below header
+    print(f"\033[{header_height};0H")
     
     # Initial setup
     device = get_device()
@@ -42,8 +46,14 @@ def train_model(config):
         num_workers=config["training"]["num_workers"]
     )
     
-    # Model setup
-    model = ModifiedAutoencoder(config, device=device).to(device)
+    # Model setup - ensure model and all its weights are on GPU
+    model = ModifiedAutoencoder(config, device=device)
+    model = model.to(device)  # Move model to device
+    
+    # Explicitly move all model parameters to device
+    for param in model.parameters():
+        param.data = param.data.to(device)
+    
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=config["model"]["learning_rate"],
@@ -74,14 +84,17 @@ def train_model(config):
     patience_counter = 0
     
     for epoch in range(start_epoch, epochs):
+        # Position cursor below header for epoch information
+        print(f"\033[{header_height+1};0H")
+        print(f"Epoch {epoch + 1}/{epochs}")
+        
         # Training phase
         model.train()
         epoch_loss = 0.0
         num_batches = 0
         
-        # Update progress at bottom of screen
-        print(f"\033[{terminal_height};0H")  # Move to bottom
-        print(f"Training Epoch {epoch + 1}/{epochs}")
+        # Position progress bar at bottom of screen
+        print(f"\033[{terminal_height-2};0H")
         
         for images, _ in tqdm(train_loader, leave=False, position=terminal_height-2):
             images = images.to(device)
@@ -103,8 +116,8 @@ def train_model(config):
             patience_counter = 0
             save_checkpoint(model, epoch + 1, avg_epoch_loss, config, checkpoint_path)
             
-            # Generate latent space class by class
-            print(f"\033[{terminal_height};0H")
+            # Generate latent space after saving best model
+            print(f"\033[{terminal_height-1};0H")
             print("Generating latent space representations...")
             
             model.eval()
@@ -121,30 +134,28 @@ def train_model(config):
                         num_workers=config["training"]["num_workers"]
                     )
                     
-                    print(f"\033[{terminal_height};0H")
+                    print(f"\033[{terminal_height-1};0H")
                     print(f"Processing class: {class_name} ({len(class_subset)} images)")
                     
                     for images, _ in tqdm(class_loader, leave=False, position=terminal_height-2):
                         images = images.to(device)
                         _, latent_1d = model(images)
                         
-                        # Get paths for saving
                         batch_indices = [class_indices[i] for i in range(len(images))]
                         full_paths = [train_dataset.imgs[i][0] for i in batch_indices]
-                        
-                        # Save latent representations with original filenames
                         save_batch_latents(latent_1d, full_paths, dataset_config["name"])
         else:
             patience_counter += 1
             
         if patience_counter >= patience:
-            print(f"\033[{terminal_height};0H")
+            print(f"\033[{terminal_height-1};0H")
             print(f"No improvement for {patience} epochs. Training stopped.")
             break
     
-    print(f"\033[{terminal_height};0H")
+    print(f"\033[{terminal_height-1};0H")
     print("Training complete!")
     return model
+
 
 
 
