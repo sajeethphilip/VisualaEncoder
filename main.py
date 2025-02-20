@@ -7,33 +7,91 @@ from autoencoder.train import train_model
 from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize,find_first_image,reconstruct_image,reconstruct_from_latent
 
 def create_default_json_config(dataset_name, data_dir, image_path):
-    """Create a default JSON configuration file interactively."""
-    # Read the first image to determine its shape
-    image = Image.open(image_path)
-    width, height = image.size
-    in_channels = 1 if image.mode == "L" else 3  # Grayscale or RGB
+    """Create a default JSON configuration file by analyzing the dataset."""
+    
+    # Analyze dataset structure
+    train_dir = os.path.join(data_dir, "train")
+    
+    # Get class information
+    class_folders = [d for d in os.listdir(train_dir) if os.path.isdir(os.path.join(train_dir, d))]
+    num_classes = len(class_folders)
+    
+    # Count total images and analyze first image
+    total_images = 0
+    class_distribution = {}
+    
+    # Read the first image to determine properties
+    first_image = None
+    for class_folder in class_folders:
+        class_path = os.path.join(train_dir, class_folder)
+        images = [f for f in os.listdir(class_path) if f.endswith(('.png', '.jpg', '.jpeg'))]
+        num_images = len(images)
+        class_distribution[class_folder] = num_images
+        total_images += num_images
+        
+        # Get first image properties if not already done
+        if first_image is None and images:
+            first_image_path = os.path.join(class_path, images[0])
+            first_image = Image.open(first_image_path)
+            width, height = first_image.size
+            in_channels = 1 if first_image.mode == "L" else 3  # Grayscale or RGB
 
-    # Interactive configuration
-    print("\nConfiguring the autoencoder...")
-    latent_dim = int(input("Enter the latent space dimension (default: 128): ") or 128)
-    embedding_dim = int(input("Enter the embedding dimension (default: 64): ") or 64)
-    learning_rate = float(input("Enter the learning rate (default: 0.001): ") or 0.001)
-    batch_size = int(input("Enter the batch size (default: 32): ") or 32)
-    epochs = int(input("Enter the number of epochs (default: 20): ") or 20)
-    classes=len(os.listdir(f"{data_dir}/train"))
-    # Create JSON configuration
+    # Calculate mean and std from a sample of images
+    print("Calculating dataset statistics...")
+    means = []
+    stds = []
+    sample_size = min(1000, total_images)  # Limit sample size for efficiency
+    sampled_images = []
+    
+    for class_folder in class_folders:
+        class_path = os.path.join(train_dir, class_folder)
+        images = [f for f in os.listdir(class_path) if f.endswith(('.png', '.jpg', '.jpeg'))]
+        sample_per_class = sample_size // num_classes
+        
+        for img_file in images[:sample_per_class]:
+            img_path = os.path.join(class_path, img_file)
+            img = Image.open(img_path)
+            if img.mode != ('L' if in_channels == 1 else 'RGB'):
+                img = img.convert('L' if in_channels == 1 else 'RGB')
+            img_tensor = transforms.ToTensor()(img)
+            sampled_images.append(img_tensor)
+    
+    if sampled_images:
+        sample_tensor = torch.stack(sampled_images)
+        means = torch.mean(sample_tensor, dim=[0, 2, 3]).tolist()
+        stds = torch.std(sample_tensor, dim=[0, 2, 3]).tolist()
+    else:
+        means = [0.5] * in_channels
+        stds = [0.5] * in_channels
+
+    # Print dataset analysis
+    print(f"\nDataset Analysis:")
+    print(f"Number of classes: {num_classes}")
+    print(f"Total images: {total_images}")
+    print("Class distribution:")
+    for class_name, count in class_distribution.items():
+        print(f"  {class_name}: {count} images")
+    print(f"Image properties:")
+    print(f"  Size: {width}x{height}")
+    print(f"  Channels: {in_channels}")
+    print(f"  Mean: {means}")
+    print(f"  Std: {stds}")
+
+    # Create configuration with analyzed parameters
     config = {
         "dataset": {
             "name": dataset_name,
             "type": "custom",
             "in_channels": in_channels,
-            "num_classes": classes,  # Update if class labels are available
-            "input_size": [height, width],  # Height x Width
-            "mean": [0.5] * in_channels,  # Default mean
-            "std": [0.5] * in_channels,  # Default std
-            "train_dir": os.path.join(data_dir, "train"),
+            "num_classes": num_classes,
+            "input_size": [height, width],
+            "mean": means,
+            "std": stds,
+            "train_dir": train_dir,
             "test_dir": os.path.join(data_dir, "test"),
-            "image_type": "grayscale" if in_channels == 1 else "rgb"
+            "image_type": "grayscale" if in_channels == 1 else "rgb",
+            "class_distribution": class_distribution,
+            "total_images": total_images
         },
         "model": {
             "encoder_type": "autoenc",
@@ -211,8 +269,8 @@ def create_default_json_config(dataset_name, data_dir, image_path):
     json_path = os.path.join(data_dir, f"{dataset_name}.json")
     with open(json_path, "w") as f:
         json.dump(config, f, indent=4)
-
-    print(f"Created default JSON configuration file at {json_path}")
+    print(f"\nCreated JSON configuration file at {json_path}")
+    
     return config
 
 def validate_config(config):
