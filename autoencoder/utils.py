@@ -131,15 +131,23 @@ def save_1d_latent_to_csv(latent_1d, image_path, dataset_name, metadata=None):
     abs_image_path = os.path.abspath(image_path)
 
     # Extract relative path while preserving class structure
-    rel_path = os.path.relpath(abs_image_path, base_data_dir)
+    try:
+        rel_path = os.path.relpath(abs_image_path, base_data_dir)
+    except ValueError:
+        # If the paths are on different drives or have other issues
+        # Fall back to extracting class name from the path
+        rel_path = '/'.join(abs_image_path.split(os.sep)[-3:])  # Take last 3 components
+
     target_dir = os.path.join(base_latent_dir, os.path.dirname(rel_path))
 
     # Create all necessary directories
     os.makedirs(target_dir, exist_ok=True)
 
+    # Get original filename without extension
+    original_filename = os.path.splitext(os.path.basename(image_path))[0]
+
     # Create the CSV filename with the same basename as the image
-    basename = os.path.splitext(os.path.basename(image_path))[0]
-    csv_path = os.path.join(target_dir, f"{basename}.csv")
+    csv_path = os.path.join(target_dir, f"{original_filename}.csv")
 
     # Convert latent values to numpy and flatten if needed
     if isinstance(latent_1d, torch.Tensor):
@@ -178,10 +186,16 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
 
     # Process each image in the batch
     for idx, (latent, path) in enumerate(zip(batch_latents, image_paths)):
+        # Extract the original filename from the path
+        filename = os.path.basename(path)
+        base_filename = os.path.splitext(filename)[0]
+
         # Create metadata for this specific image
         metadata = {
             'batch_idx': idx,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'original_path': path,
+            'filename': filename
         }
 
         # Add any batch-level metadata
@@ -201,7 +215,6 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
 
         except Exception as e:
             print(f"Error saving latent for {path}: {str(e)}")
-
 def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
     """
     Reconstruct images from latent CSV files maintaining the original folder hierarchy.

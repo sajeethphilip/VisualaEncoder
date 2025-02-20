@@ -99,7 +99,7 @@ def train_model(config):
             # Get full paths from the dataset
             if hasattr(train_dataset, 'imgs'):
                 # For ImageFolder dataset
-                full_paths = [train_dataset.imgs[i][0] for i in paths]
+                full_paths = [train_dataset.imgs[i][0] for i in range(len(images))]
             else:
                 # Fallback to paths if imgs not available
                 full_paths = paths
@@ -115,6 +115,7 @@ def train_model(config):
                 'batch': batch_idx,
                 'timestamp': datetime.now().isoformat()
             }
+
             # Save latents for all images in the batch
             save_batch_latents(latent_1d, full_paths, dataset_config["name"], batch_metadata)
             '''
