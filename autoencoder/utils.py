@@ -1150,6 +1150,16 @@ def load_local_dataset(dataset_name, transform=None):
 
     data_dir = f"data/{dataset_name}/train/"
     dataset = datasets.ImageFolder(root=data_dir, transform=transform)
+
+    # Print class distribution
+    class_counts = {cls: 0 for cls in dataset.classes}
+    for _, label in dataset:
+        class_counts[dataset.classes[label]] += 1
+
+    print("Class distribution in dataset:")
+    for cls, count in class_counts.items():
+        print(f"  {cls}: {count} images")
+
     return dataset
 
 def load_dataset_config(dataset_name):
