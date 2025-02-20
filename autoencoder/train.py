@@ -14,6 +14,11 @@ from tqdm import tqdm
 def train_model(config):
     """Train the autoencoder model with clean display and class-wise latent generation."""
     
+    # Get terminal size
+    import os
+    terminal_size = os.get_terminal_size()
+    terminal_height = terminal_size.lines
+
     # Display header (stays at top)
     print("\033[2J\033[H")  # Clear screen
     print("="*80)
@@ -74,11 +79,11 @@ def train_model(config):
         epoch_loss = 0.0
         num_batches = 0
         
-        # Single progress bar at bottom
+        # Update progress at bottom of screen
         print(f"\033[{terminal_height};0H")  # Move to bottom
         print(f"Training Epoch {epoch + 1}/{epochs}")
         
-        for images, _ in tqdm(train_loader, leave=False):
+        for images, _ in tqdm(train_loader, leave=False, position=terminal_height-2):
             images = images.to(device)
             reconstructed, _ = model(images)
             
@@ -98,8 +103,8 @@ def train_model(config):
             patience_counter = 0
             save_checkpoint(model, epoch + 1, avg_epoch_loss, config, checkpoint_path)
             
-            # Generate latent space after saving best model
-            print("\033[{terminal_height};0H")  # Move to bottom
+            # Generate latent space class by class
+            print(f"\033[{terminal_height};0H")
             print("Generating latent space representations...")
             
             model.eval()
@@ -116,10 +121,10 @@ def train_model(config):
                         num_workers=config["training"]["num_workers"]
                     )
                     
-                    print(f"\033[{terminal_height};0H")  # Move to bottom
+                    print(f"\033[{terminal_height};0H")
                     print(f"Processing class: {class_name} ({len(class_subset)} images)")
                     
-                    for images, _ in tqdm(class_loader, leave=False):
+                    for images, _ in tqdm(class_loader, leave=False, position=terminal_height-2):
                         images = images.to(device)
                         _, latent_1d = model(images)
                         
@@ -133,13 +138,14 @@ def train_model(config):
             patience_counter += 1
             
         if patience_counter >= patience:
-            print(f"\033[{terminal_height};0H")  # Move to bottom
+            print(f"\033[{terminal_height};0H")
             print(f"No improvement for {patience} epochs. Training stopped.")
             break
     
-    print("\033[{terminal_height};0H")  # Move to bottom
+    print(f"\033[{terminal_height};0H")
     print("Training complete!")
     return model
+
 
 
 
