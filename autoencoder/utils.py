@@ -165,9 +165,18 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
     Args:
         batch_latents: Tensor of latent representations (batch_size x latent_dim)
         image_paths: List of paths to original images
-        dataset_name: Name of the dataset
+        dataset_name: String name of the dataset
         batch_metadata: Optional dictionary of metadata for the batch
     """
+    # Ensure inputs are valid
+    if not isinstance(batch_latents, torch.Tensor):
+        raise ValueError("batch_latents must be a torch.Tensor")
+    if not isinstance(image_paths, (list, tuple)):
+        raise ValueError("image_paths must be a list or tuple")
+    if len(batch_latents) != len(image_paths):
+        raise ValueError(f"Number of latents ({len(batch_latents)}) does not match number of paths ({len(image_paths)})")
+
+    # Process each image in the batch
     for idx, (latent, path) in enumerate(zip(batch_latents, image_paths)):
         # Create metadata for this specific image
         metadata = {
@@ -179,8 +188,19 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
         if batch_metadata:
             metadata.update(batch_metadata)
 
-        # Save individual latent representation
-        save_1d_latent_to_csv(latent, path, dataset_name, metadata)
+        try:
+            # Save individual latent representation
+            csv_path = save_1d_latent_to_csv(
+                latent,
+                path,
+                dataset_name,
+                metadata
+            )
+            if idx == 0:  # Print first save location as confirmation
+                print(f"Saving batch latents to directory: {os.path.dirname(csv_path)}")
+
+        except Exception as e:
+            print(f"Error saving latent for {path}: {str(e)}")
 
 def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
     """
