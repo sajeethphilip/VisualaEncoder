@@ -1128,37 +1128,19 @@ def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
 
 
 def load_local_dataset(dataset_name, transform=None):
-    """Load a dataset from a local directory with validation."""
+    """Load a dataset from a local directory."""
     # Load config first
     config = load_dataset_config(dataset_name)
-    data_dir = f"data/{dataset_name}/train/"
-
-    # Validate directory structure first
-    class_dirs = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
-    print(f"\nFound {len(class_dirs)} classes: {', '.join(class_dirs)}")
-
-    # Count images in each class
-    class_counts = {}
-    total_images = 0
-    for class_name in class_dirs:
-        class_path = os.path.join(data_dir, class_name)
-        images = [f for f in os.listdir(class_path) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp'))]
-        class_counts[class_name] = len(images)
-        total_images += len(images)
-
-    print("\nImages per class:")
-    for class_name, count in class_counts.items():
-        print(f"{class_name}: {count} images ({(count/total_images)*100:.2f}%)")
 
     if transform is None:
         # Use dataset-specific normalization from config
         transform_list = []
 
-        # Handle grayscale/RGB conversion based on config
+        # Only apply grayscale transformation if in_channels is 1
         if config['in_channels'] == 1:
             transform_list.append(transforms.Grayscale(num_output_channels=1))
 
-        # Add standard transforms
+        # Add ToTensor and Normalize transformations
         transform_list.extend([
             transforms.ToTensor(),
             transforms.Normalize(mean=config['mean'], std=config['std'])
@@ -1166,34 +1148,9 @@ def load_local_dataset(dataset_name, transform=None):
 
         transform = transforms.Compose(transform_list)
 
-    # Load dataset with image validation
-    dataset = ImageFolderWithValidation(root=data_dir, transform=transform)
-
-    return dataset, class_counts
-
-class ImageFolderWithValidation(datasets.ImageFolder):
-    """Extended ImageFolder class with additional validation"""
-    def __init__(self, root, transform=None):
-        self.image_problems = []
-        super().__init__(root=root, transform=transform)
-
-    def __getitem__(self, index):
-        path, target = self.samples[index]
-        try:
-            # Attempt to load and validate image
-            with Image.open(path) as img:
-                img.verify()  # Verify image integrity
-                img = Image.open(path).convert('RGB')  # Reopen because verify closes the file
-
-                if self.transform is not None:
-                    img = self.transform(img)
-
-                return img, target
-
-        except Exception as e:
-            self.image_problems.append((path, str(e)))
-            # Skip problematic image and get next valid one
-            return self.__getitem__((index + 1) % len(self))
+    data_dir = f"data/{dataset_name}/train/"
+    dataset = datasets.ImageFolder(root=data_dir, transform=transform)
+    return dataset
 
 def load_dataset_config(dataset_name):
     """Load dataset configuration from JSON file."""
