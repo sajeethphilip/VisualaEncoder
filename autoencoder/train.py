@@ -14,7 +14,7 @@ from tqdm import tqdm
 def train_model(config):
     """Train the autoencoder model with proper device handling."""
     
-    # Get device first
+    # Get device first and ensure it's consistent
     device = get_device()
     print(f"\033[2J\033[H")  # Clear screen
     print("\033[96m" + "="*80 + "\033[0m")
@@ -28,7 +28,7 @@ def train_model(config):
     # Get terminal size
     terminal_size = os.get_terminal_size()
     terminal_height = terminal_size.lines
-    header_height = 10  # Reserve space for header
+    header_height = 10
     
     # Dataset setup
     dataset_config = config["dataset"]
@@ -43,13 +43,9 @@ def train_model(config):
         num_workers=config["training"]["num_workers"]
     )
     
-    # Model initialization - CRITICAL DEVICE HANDLING
+    # Model initialization with explicit device handling
     model = ModifiedAutoencoder(config, device=device)
     model = model.to(device)
-    
-    # Explicitly ensure all model parameters are on the correct device
-    for param in model.parameters():
-        param.data = param.data.to(device)
     
     # Optimizer setup
     optimizer = torch.optim.Adam(
@@ -71,9 +67,11 @@ def train_model(config):
     if os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
-        model = model.to(device)  # Ensure model is on correct device after loading
         start_epoch = checkpoint.get("epoch", 0)
         best_loss = checkpoint.get("loss", float("inf"))
+    
+    # Ensure model is on correct device after loading checkpoint
+    model = model.to(device)
     
     # Training loop
     epochs = config["training"]["epochs"]
@@ -90,14 +88,16 @@ def train_model(config):
         print(f"Epoch {epoch + 1}/{epochs}")
         
         for images, _ in tqdm(train_loader, leave=False, position=terminal_height-header_height):
-            # Ensure input is on correct device
+            # Move images to device
             images = images.to(device)
             
-            # Forward pass
+            # Forward pass - note only two return values
             reconstructed, latent_1d = model(images)
             
-            # Loss computation and backward pass
+            # Loss computation
             loss = criterion_recon(reconstructed, images)
+            
+            # Backward pass
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -112,7 +112,9 @@ def train_model(config):
         if avg_epoch_loss < best_loss:
             best_loss = avg_epoch_loss
             patience_counter = 0
+            model.cpu()  # Move to CPU for saving
             save_checkpoint(model, epoch + 1, avg_epoch_loss, config, checkpoint_path)
+            model.to(device)  # Move back to original device
         else:
             patience_counter += 1
             
@@ -124,6 +126,7 @@ def train_model(config):
     print(f"\033[{terminal_height-1};0H")
     print("Training complete!")
     return model
+
 
 
 
