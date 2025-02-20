@@ -10,30 +10,19 @@ from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_
 from autoencoder.utils import  load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv,save_batch_latents
 from datetime import datetime
 from tqdm import tqdm
+
 def train_model(config):
-    """
-    Train the autoencoder model with comprehensive class distribution monitoring.
-
-    Args:
-        config (dict): Configuration dictionary containing model and training parameters
-    """
-    ## Setup and Initialization
-
-    # Get device
-    device = get_device()
-    print(f"\nUsing device: {device}")
+    """Train the autoencoder model with enhanced monitoring and latent space saving."""
 
     # Load dataset configuration
     dataset_config = config["dataset"]
     data_dir = os.path.join("data", dataset_config["name"], "train")
 
-    ## Class Structure Verification
-
-    # Get class folders
+    # Verify class structure
     class_folders = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
     print(f"\nFound {len(class_folders)} classes:")
 
-    # Display initial class distribution
+    # Initial class distribution
     total_images = 0
     class_counts = {}
     for class_name in class_folders:
@@ -44,14 +33,8 @@ def train_model(config):
         total_images += num_images
         print(f"  • {class_name}: {num_images} images ({(num_images/total_images)*100:.1f}%)")
 
-    ## Dataset Loading
-
-    # Create dataset
+    # Create dataset and loader
     train_dataset = load_local_dataset(dataset_config["name"])
-    print(f"\nDataset classes: {train_dataset.classes}")
-    print(f"Class to idx mapping: {train_dataset.class_to_idx}")
-
-    # Create data loader
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["training"]["batch_size"],
@@ -59,13 +42,15 @@ def train_model(config):
         num_workers=config["training"]["num_workers"]
     )
 
-    ## Model Setup
+    # Model initialization
+    device = get_device()
+    print(f"\nUsing device: {device}")
 
-    # Initialize model
+    # Initialize model and move to device
     model = ModifiedAutoencoder(config, device=device)
     model = model.to(device)
 
-    # Setup optimizer
+    # Optimizer setup
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=config["model"]["learning_rate"],
@@ -75,28 +60,25 @@ def train_model(config):
         eps=config["model"]["optimizer"]["epsilon"]
     )
 
-    # Loss function
     criterion_recon = nn.MSELoss()
 
-    ## Checkpoint Management
-
+    # Checkpoint handling
     checkpoint_dir = config["training"]["checkpoint_dir"]
     checkpoint_path = os.path.join(checkpoint_dir, "best_model.pth")
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    # Load existing checkpoint if available
+    # Load checkpoint if exists
     start_epoch = 0
     best_loss = float("inf")
     if os.path.exists(checkpoint_path):
-        print(f"\nLoading existing checkpoint from {checkpoint_path}")
+        print(f"\nLoading checkpoint from {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         start_epoch = checkpoint.get("epoch", 0)
         best_loss = checkpoint.get("loss", float("inf"))
 
-    ## Training Loop
-
-    epochs = config["training"]["epochs"]
+    # Important: Ensure at least one epoch of training
+    epochs = max(config["training"]["epochs"] + start_epoch, start_epoch + 1)
     patience = config["training"]["early_stopping"]["patience"]
     patience_counter = 0
 
@@ -107,7 +89,6 @@ def train_model(config):
         epoch_loss = 0.0
         epoch_class_counts = {class_name: 0 for class_name in class_folders}
 
-        # Progress bar for batches
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
 
         for batch_idx, (images, labels) in enumerate(progress_bar):
@@ -116,26 +97,36 @@ def train_model(config):
                 class_name = train_dataset.classes[label.item()]
                 epoch_class_counts[class_name] += 1
 
-            # Move data to device
+            # Get full paths for latent space saving
+            if hasattr(train_dataset, 'imgs'):
+                full_paths = [train_dataset.imgs[i][0] for i in range(len(images))]
+            else:
+                full_paths = [os.path.join(data_dir, train_dataset.classes[label.item()])
+                            for label in labels]
+
             images = images.to(device)
 
             # Forward pass
             reconstructed, latent_1d = model(images)
 
-            # Compute loss and optimize
+            # Save batch latents with metadata
+            batch_metadata = {
+                'epoch': epoch + 1,
+                'batch': batch_idx,
+                'timestamp': datetime.now().isoformat()
+            }
+            save_batch_latents(latent_1d, full_paths, dataset_config["name"], batch_metadata)
+
+            # Loss computation and optimization
             loss = criterion_recon(reconstructed, images)
             optimizer.zero_grad()
             loss.backward()
-
-            # Gradient clipping
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
-            # Update metrics
             current_loss = loss.item()
             epoch_loss += current_loss
 
-            # Update progress bar
             progress_bar.set_postfix({
                 'loss': current_loss,
                 'avg_loss': epoch_loss / (batch_idx + 1)
@@ -146,14 +137,14 @@ def train_model(config):
         print(f"\nEpoch [{epoch + 1}/{epochs}]")
         print(f"Average Loss: {avg_epoch_loss:.4f}")
 
-        # Display class distribution for this epoch
+        # Display class distribution
         print("\nClass distribution this epoch:")
         total_samples = sum(epoch_class_counts.values())
         for class_name, count in epoch_class_counts.items():
             percentage = (count / total_samples) * 100
             print(f"  • {class_name}: {count} samples ({percentage:.1f}%)")
 
-        # Checkpoint saving
+        # Save checkpoint if improved
         if avg_epoch_loss < best_loss:
             best_loss = avg_epoch_loss
             patience_counter = 0
@@ -171,6 +162,7 @@ def train_model(config):
 
     print("\nTraining complete!")
     return model
+
 
 def train_model_old(config):
     """Train the autoencoder model with enhanced class folder verification."""
