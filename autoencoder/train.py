@@ -11,7 +11,7 @@ from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_
 from datetime import datetime
 
 def train_model(config):
-    """Train the autoencoder model with improved confusion matrix and positioning."""
+    """Train the autoencoder model with improved confusion matrix handling."""
     device = get_device()
     print(f"Using device: {device}")
 
@@ -28,8 +28,8 @@ def train_model(config):
     class_names = dataset.classes
     num_classes = len(class_names)
 
-    # Initialize confusion matrix
-    confusion_matrix = torch.zeros((num_classes, num_classes), device=device)
+    # Initialize confusion matrix as FloatTensor for better numeric stability
+    confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.float32, device=device)
 
     # Model setup
     model = ModifiedAutoencoder(config).to(device)
@@ -44,6 +44,9 @@ def train_model(config):
     for epoch in range(config["training"]["epochs"]):
         model.train()
         running_loss = 0.0
+        
+        # Reset confusion matrix at start of each epoch
+        confusion_matrix.zero_()
         
         for batch_idx, (images, labels) in enumerate(dataset):
             # Convert images and labels to tensors if they aren't already
@@ -65,7 +68,7 @@ def train_model(config):
             # Forward pass
             reconstructed, latent_1d = model(images)
             
-            # Update confusion matrix (assuming you have this function)
+            # Update confusion matrix
             with torch.no_grad():
                 pred_labels = torch.argmax(latent_1d, dim=1)
                 for t, p in zip(labels, pred_labels):
@@ -96,7 +99,8 @@ def train_model(config):
             # Update displays with static positioning
             if batch_idx % config.get("display_interval", 10) == 0:
                 avg_loss = running_loss / (batch_idx + 1)
-                display_confusion_matrix(confusion_matrix.cpu().numpy(), class_names, terminal_height, header_height)
+                # Make sure confusion matrix is converted to numpy array
+                display_confusion_matrix(confusion_matrix, class_names, terminal_height, header_height)
                 update_progress(epoch + 1, batch_idx + 1, len(dataset), avg_loss, terminal_height)
     
     return model
