@@ -171,9 +171,11 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
     """
     Save latent representations for a batch of images while maintaining folder hierarchy.
     """
-    # Initialize class counters
-    class_counts = {}
-    total_saved = 0
+    # Initialize class counters if not present in metadata
+    if batch_metadata is None:
+        batch_metadata = {}
+    if 'class_counts' not in batch_metadata:
+        batch_metadata['class_counts'] = {}
 
     # Get base directories
     base_data_dir = os.path.abspath(f"data/{dataset_name}")
@@ -187,32 +189,29 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
             path_parts = abs_image_path.split(os.sep)
             train_idx = path_parts.index("train")
 
-            # Extract class name from path
+            # Extract class name
             class_name = path_parts[train_idx + 1]
 
             # Update class counter
-            class_counts[class_name] = class_counts.get(class_name, 0) + 1
-            total_saved += 1
+            batch_metadata['class_counts'][class_name] = batch_metadata['class_counts'].get(class_name, 0) + 1
 
             relative_structure = os.sep.join(path_parts[train_idx+1:])
             target_dir = os.path.join(base_latent_dir, "train", os.path.dirname(relative_structure))
             os.makedirs(target_dir, exist_ok=True)
 
-            # Create metadata
-            metadata = {
-                'batch_idx': idx,
-                'timestamp': datetime.now().isoformat(),
-                'original_path': path,
-                'relative_path': relative_structure,
-                'class': class_name
-            }
-
-            if batch_metadata:
-                metadata.update(batch_metadata)
-
-            # Save CSV file
+            # Save latent values with metadata
             filename = os.path.splitext(os.path.basename(path))[0]
             csv_path = os.path.join(target_dir, f"{filename}.csv")
+
+            metadata = {
+                'batch_idx': idx,
+                'epoch': batch_metadata.get('epoch', 0),
+                'batch': batch_metadata.get('batch', 0),
+                'class': class_name,
+                'timestamp': datetime.now().isoformat(),
+                'original_path': path,
+                'relative_path': relative_structure
+            }
 
             latent_values = latent.detach().cpu().numpy().flatten()
             data = {
@@ -228,13 +227,13 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
             print(f"Error saving latent for {path}: {str(e)}")
             continue
 
-    # Print distribution summary after each batch
-    print("\nLatent space saving summary:")
-    print(f"Total files saved: {total_saved}")
-    print("\nClass distribution:")
-    for class_name, count in class_counts.items():
-        percentage = (count / total_saved) * 100
-        print(f"  • {class_name}: {count} files ({percentage:.1f}%)")
+    # Print summary after each batch
+    print("\nLatent space saving summary for this batch:")
+    for class_name, count in batch_metadata['class_counts'].items():
+        print(f"  • {class_name}: {count} files")
+
+    return batch_metadata['class_counts']
+
 
 
 

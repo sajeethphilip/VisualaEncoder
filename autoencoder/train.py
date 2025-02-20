@@ -12,7 +12,7 @@ from datetime import datetime
 from tqdm import tqdm
 
 def train_model(config):
-    """Train the autoencoder model with enhanced monitoring and latent space saving."""
+    """Train the autoencoder model with end-of-epoch latent space saving."""
 
     # Load dataset configuration
     dataset_config = config["dataset"]
@@ -33,7 +33,7 @@ def train_model(config):
         total_images += num_images
         print(f"  • {class_name}: {num_images} images ({(num_images/total_images)*100:.1f}%)")
 
-    # Create dataset and loader
+    # Create dataset and loaders
     train_dataset = load_local_dataset(dataset_config["name"])
     train_loader = DataLoader(
         train_dataset,
@@ -42,15 +42,20 @@ def train_model(config):
         num_workers=config["training"]["num_workers"]
     )
 
+    # Create a separate loader for latent space generation (no shuffling)
+    latent_loader = DataLoader(
+        train_dataset,
+        batch_size=config["training"]["batch_size"],
+        shuffle=False,  # Important: Keep order consistent
+        num_workers=config["training"]["num_workers"]
+    )
+
     # Model initialization
     device = get_device()
     print(f"\nUsing device: {device}")
+    model = ModifiedAutoencoder(config, device=device).to(device)
 
-    # Initialize model and move to device
-    model = ModifiedAutoencoder(config, device=device)
-    model = model.to(device)
-
-    # Optimizer setup
+    # Training setup
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=config["model"]["learning_rate"],
@@ -77,7 +82,7 @@ def train_model(config):
         start_epoch = checkpoint.get("epoch", 0)
         best_loss = checkpoint.get("loss", float("inf"))
 
-    # Important: Ensure at least one epoch of training
+    # Ensure at least one epoch of training
     epochs = max(config["training"]["epochs"] + start_epoch, start_epoch + 1)
     patience = config["training"]["early_stopping"]["patience"]
     patience_counter = 0
@@ -87,37 +92,14 @@ def train_model(config):
     for epoch in range(start_epoch, epochs):
         model.train()
         epoch_loss = 0.0
-        epoch_class_counts = {class_name: 0 for class_name in class_folders}
+        num_batches = 0
 
+        # Training loop
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
-
-        for batch_idx, (images, labels) in enumerate(progress_bar):
-            # Update class distribution tracking
-            for label in labels:
-                class_name = train_dataset.classes[label.item()]
-                epoch_class_counts[class_name] += 1
-
-            # Get full paths for latent space saving
-            if hasattr(train_dataset, 'imgs'):
-                full_paths = [train_dataset.imgs[i][0] for i in range(len(images))]
-            else:
-                full_paths = [os.path.join(data_dir, train_dataset.classes[label.item()])
-                            for label in labels]
-
+        for images, _ in progress_bar:
             images = images.to(device)
+            reconstructed, _ = model(images)
 
-            # Forward pass
-            reconstructed, latent_1d = model(images)
-
-            # Save batch latents with metadata
-            batch_metadata = {
-                'epoch': epoch + 1,
-                'batch': batch_idx,
-                'timestamp': datetime.now().isoformat()
-            }
-            save_batch_latents(latent_1d, full_paths, dataset_config["name"], batch_metadata)
-
-            # Loss computation and optimization
             loss = criterion_recon(reconstructed, images)
             optimizer.zero_grad()
             loss.backward()
@@ -126,25 +108,17 @@ def train_model(config):
 
             current_loss = loss.item()
             epoch_loss += current_loss
+            num_batches += 1
 
             progress_bar.set_postfix({
                 'loss': current_loss,
-                'avg_loss': epoch_loss / (batch_idx + 1)
+                'avg_loss': epoch_loss / num_batches
             })
 
-        # Epoch summary
-        avg_epoch_loss = epoch_loss / len(train_loader)
-        print(f"\nEpoch [{epoch + 1}/{epochs}]")
-        print(f"Average Loss: {avg_epoch_loss:.4f}")
+        avg_epoch_loss = epoch_loss / num_batches
+        print(f"\nEpoch [{epoch + 1}/{epochs}] - Average Loss: {avg_epoch_loss:.4f}")
 
-        # Display class distribution
-        print("\nClass distribution this epoch:")
-        total_samples = sum(epoch_class_counts.values())
-        for class_name, count in epoch_class_counts.items():
-            percentage = (count / total_samples) * 100
-            print(f"  • {class_name}: {count} samples ({percentage:.1f}%)")
-
-        # Save checkpoint if improved
+        # Save checkpoint if loss improved
         if avg_epoch_loss < best_loss:
             best_loss = avg_epoch_loss
             patience_counter = 0
@@ -152,6 +126,32 @@ def train_model(config):
             save_checkpoint(model, epoch + 1, avg_epoch_loss, config, checkpoint_path)
             model.to(device)
             print(f"\nSaved best model checkpoint (loss: {best_loss:.4f})")
+
+            # Generate and save latent space after saving best model
+            print("\nGenerating latent space representations...")
+            model.eval()
+            with torch.no_grad():
+                for batch_idx, (images, _) in enumerate(tqdm(latent_loader, desc="Saving latent space")):
+                    # Get full paths for latent space saving
+                    if hasattr(train_dataset, 'imgs'):
+                        full_paths = [train_dataset.imgs[i][0] for i in range(len(images))]
+                    else:
+                        full_paths = [os.path.join(data_dir, train_dataset.classes[label.item()])
+                                    for label in labels]
+
+                    images = images.to(device)
+                    _, latent_1d = model(images)
+
+                    # Save batch latents with metadata
+                    batch_metadata = {
+                        'epoch': epoch + 1,
+                        'batch': batch_idx,
+                        'model_loss': avg_epoch_loss,
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    save_batch_latents(latent_1d, full_paths, dataset_config["name"], batch_metadata)
+
+            print("\nLatent space saved successfully!")
         else:
             patience_counter += 1
 
@@ -162,6 +162,7 @@ def train_model(config):
 
     print("\nTraining complete!")
     return model
+
 
 
 def train_model_old(config):
