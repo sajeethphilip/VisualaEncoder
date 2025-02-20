@@ -18,7 +18,9 @@ import pandas as pd
 import shutil
 from datetime import datetime
 #import datetime
-
+import numpy as np
+import torch
+from typing import List, Union
 import os
 import requests
 import zipfile
@@ -216,37 +218,76 @@ def display_header():
     print("AIRIS, Thelliyoor".center(80))
     print("="*80)
 
-def display_confusion_matrix(confusion_matrix, class_names, terminal_height, header_height):
+def display_confusion_matrix(
+    confusion_matrix: Union[np.ndarray, torch.Tensor], 
+    class_names: List[str], 
+    terminal_height: int, 
+    header_height: int
+) -> None:
     """
-    Display confusion matrix with static positioning.
+    Display the confusion matrix with proper handling of both numpy arrays and torch tensors.
     
     Args:
-        confusion_matrix: The confusion matrix tensor
+        confusion_matrix: Either a numpy array or torch tensor containing the confusion matrix
         class_names: List of class names
-        terminal_height: Total terminal height
-        header_height: Height of the header section
+        terminal_height: Height of the terminal
+        header_height: Height reserved for header
     """
-    # Calculate accuracies
-    correct = confusion_matrix.diag()
-    total = confusion_matrix.sum(1)
-    accuracies = (correct / total) * 100
-
-    # Clear the confusion matrix display area
-    print(f"\033[{header_height};0H")
-    print("\033[J")  # Clear from cursor to end of screen
+    # Convert to numpy if it's a torch tensor
+    if isinstance(confusion_matrix, torch.Tensor):
+        confusion_matrix = confusion_matrix.cpu().numpy()
     
-    # Print header
-    print("\033[96mReconstruction Accuracy Matrix:\033[0m")
+    # Calculate metrics
+    correct = np.diagonal(confusion_matrix)
+    total = confusion_matrix.sum(axis=1)
+    accuracy = correct / total
     
-    # Print matrix with colors
-    for i, class_name in enumerate(class_names):
-        accuracy = accuracies[i].item()
-        color = "\033[92m" if accuracy > 80 else "\033[93m" if accuracy > 60 else "\033[91m"
-        print(f"{color}{class_name:<15} {accuracy:>6.1f}% ({correct[i]:>4d}/{total[i]:>4d})\033[0m")
-
-    # Return cursor to a safe position
-    print(f"\033[{terminal_height};0H")
-
+    # Create the display string
+    display_str = "\033[H"  # Move to top of screen
+    display_str += "\n" * header_height  # Move past header
+    
+    # Add class-wise accuracy
+    display_str += "Class-wise Accuracy:\n"
+    for i, (class_name, acc) in enumerate(zip(class_names, accuracy)):
+        display_str += f"{class_name}: {acc:.2%}\n"
+    
+    # Add overall accuracy
+    total_correct = correct.sum()
+    total_samples = total.sum()
+    overall_accuracy = total_correct / total_samples
+    display_str += f"\nOverall Accuracy: {overall_accuracy:.2%}\n"
+    
+    # Add confusion matrix
+    display_str += "\nConfusion Matrix:\n"
+    display_str += "True\\Pred |"
+    for name in class_names:
+        display_str += f" {name:>8} |"
+    display_str += "\n" + "-" * (10 + 11 * len(class_names)) + "\n"
+    
+    for i, true_class in enumerate(class_names):
+        display_str += f"{true_class:9} |"
+        for j in range(len(class_names)):
+            display_str += f" {confusion_matrix[i, j]:8.0f} |"
+        display_str += "\n"
+    
+    print(display_str)
+    
+def update_progress(
+    epoch: int,
+    batch: int,
+    total_batches: int,
+    loss: float,
+    terminal_height: int
+) -> None:
+    """
+    Update the progress display with current training metrics.
+    """
+    progress = (batch / total_batches) * 100
+    display_str = f"\033[{terminal_height-3}H"  # Move to bottom of screen
+    display_str += f"Epoch: {epoch} | Batch: {batch}/{total_batches} | "
+    display_str += f"Progress: {progress:.1f}% | Loss: {loss:.4f}"
+    print(display_str)
+    
 def update_progress_bar(epoch, batch, total_batches, loss, terminal_height):
     """
     Update progress bar with static positioning.
@@ -271,20 +312,6 @@ def create_confusion_matrix(num_classes):
     """Initialize a proper confusion matrix."""
     return torch.zeros((num_classes, num_classes), dtype=torch.long)
     
-
-def update_progress(message, current, total, accuracy=None):
-    """Update progress bar at bottom of screen."""
-    print(f"\033[{terminal_height};0H")  # Move to bottom
-    print("\033[K", end="")  # Clear line
-
-    bar_width = 60
-    filled = int(bar_width * current / total)
-    bar = "█" * filled + "-" * (bar_width - filled)
-
-    if accuracy is not None:
-        print(f"{message}: [{bar}] {current}/{total} (Accuracy: {accuracy:.2f}%)", end="\r")
-    else:
-        print(f"{message}: [{bar}] {current}/{total}", end="\r")
 
 
 def save_batch_latents(batch_latents, image_paths, dataset_name, metadata=None):
