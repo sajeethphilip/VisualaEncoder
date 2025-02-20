@@ -5,11 +5,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
-from autoencoder.model import Autoencoder,ModifiedAutoencoder
-from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv,save_checkpoint,update_progress,display_confusion_matrix,create_confusion_matrix
-from autoencoder.utils import  load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv,save_batch_latents,display_header
+from autoencoder.model import Autoencoder, ModifiedAutoencoder
+from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv, save_checkpoint, update_progress, display_confusion_matrix
+from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv, save_batch_latents, display_header
 from datetime import datetime
-from tqdm import tqdm
 
 def train_model(config):
     """Train the autoencoder model with improved confusion matrix and positioning."""
@@ -30,7 +29,7 @@ def train_model(config):
     num_classes = len(class_names)
 
     # Initialize confusion matrix
-    confusion_matrix = create_confusion_matrix(num_classes).to(device)
+    confusion_matrix = torch.zeros((num_classes, num_classes), device=device)
 
     # Model setup
     model = ModifiedAutoencoder(config).to(device)
@@ -44,23 +43,41 @@ def train_model(config):
     # Training loop
     for epoch in range(config["training"]["epochs"]):
         model.train()
+        running_loss = 0.0
         
         for batch_idx, (images, labels) in enumerate(dataset):
-            # Ensure data is on correct device
+            # Convert images and labels to tensors if they aren't already
+            if not isinstance(images, torch.Tensor):
+                images = torch.tensor(images, dtype=torch.float32)
+            if not isinstance(labels, torch.Tensor):
+                labels = torch.tensor(labels, dtype=torch.long)
+            
+            # Add batch dimension if needed
+            if len(images.shape) == 3:
+                images = images.unsqueeze(0)
+            if len(labels.shape) == 0:
+                labels = labels.unsqueeze(0)
+            
+            # Move to device
             images = images.to(device)
             labels = labels.to(device)
             
             # Forward pass
             reconstructed, latent_1d = model(images)
             
-            # Update confusion matrix
-            update_confusion_matrix(images, reconstructed, labels, confusion_matrix)
+            # Update confusion matrix (assuming you have this function)
+            with torch.no_grad():
+                pred_labels = torch.argmax(latent_1d, dim=1)
+                for t, p in zip(labels, pred_labels):
+                    confusion_matrix[t.long(), p.long()] += 1
             
             # Compute loss and optimize
             loss = criterion(reconstructed, images)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            
+            running_loss += loss.item()
             
             # Save latent representations
             batch_metadata = {
@@ -70,19 +87,19 @@ def train_model(config):
                 'timestamp': datetime.now().isoformat()
             }
             
-            # Get image paths
-            batch_paths = [dataset.imgs[i][0] for i in range(len(images))]
+            # Get image paths (modify according to your dataset structure)
+            batch_paths = [dataset.imgs[i][0] for i in range(len(images))] if hasattr(dataset, 'imgs') else [f"image_{i}" for i in range(len(images))]
             
             # Save latents
-            save_batch_latents(latent_1d, batch_paths, dataset_config["name"], batch_metadata)
+            save_batch_latents(latent_1d.detach().cpu(), batch_paths, dataset_config["name"], batch_metadata)
             
             # Update displays with static positioning
-            display_confusion_matrix(confusion_matrix, class_names, terminal_height, header_height)
-            update_progress_bar(epoch + 1, batch_idx + 1, len(dataset), loss.item(), terminal_height)
-            
+            if batch_idx % config.get("display_interval", 10) == 0:
+                avg_loss = running_loss / (batch_idx + 1)
+                display_confusion_matrix(confusion_matrix.cpu().numpy(), class_names, terminal_height, header_height)
+                update_progress(epoch + 1, batch_idx + 1, len(dataset), avg_loss, terminal_height)
+    
     return model
-
-
 
 def save_final_representations(model, loader, device, dataset_name):
     """Save the final latent space and embeddings."""
@@ -90,10 +107,14 @@ def save_final_representations(model, loader, device, dataset_name):
     embeddings_space = []
 
     with torch.no_grad():
-        for batch in loader:
-            images, _ = batch
+        for images, _ in loader:
+            # Ensure images are tensors and on the correct device
+            if not isinstance(images, torch.Tensor):
+                images = torch.tensor(images, dtype=torch.float32)
             images = images.to(device)
-            _, latent, embeddings = model(images)
+            
+            # Forward pass
+            reconstructed, latent, embeddings = model(images)
             latent_space.append(latent.cpu())
             embeddings_space.append(embeddings.cpu())
 
@@ -105,8 +126,8 @@ def save_final_representations(model, loader, device, dataset_name):
     save_latent_space(latent_space, dataset_name, "latent.pkl")
     save_embeddings_as_csv(embeddings_space, dataset_name, "embeddings.csv")
 
-
 if __name__ == "__main__":
-    # Example usage
-    dataset_name = "mnist"  # Replace with the dataset name
-    train_model(dataset_name)
+    config_path = "config.json"
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+    train_model(config)
