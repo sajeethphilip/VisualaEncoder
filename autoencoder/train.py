@@ -11,6 +11,22 @@ from autoencoder.utils import  load_checkpoint, load_local_dataset, load_dataset
 from datetime import datetime
 from tqdm import tqdm
 
+def verify_batch_distribution(dataloader, num_classes):
+    """Verify the class distribution in a batch."""
+    class_counts = torch.zeros(num_classes)
+    for batch_idx, (_, labels) in enumerate(dataloader):
+        for label in labels:
+            class_counts[label] += 1
+        if batch_idx == 0:  # Check first batch
+            print("\nFirst batch class distribution:")
+            for class_idx, count in enumerate(class_counts):
+                print(f" Class {class_idx}: {int(count)} images")
+
+    print("\nTotal dataset class distribution:")
+    for class_idx, count in enumerate(class_counts):
+        print(f" Class {class_idx}: {int(count)} images")
+
+
 def train_model(config):
     """Train the autoencoder model with enhanced class folder verification."""
     # Load dataset
@@ -30,11 +46,29 @@ def train_model(config):
     print(f"\nDataset classes: {train_dataset.classes}")
     print(f"Class to idx mapping: {train_dataset.class_to_idx}")
 
+    # Create a weighted sampler for balanced sampling
+    class_counts = torch.tensor([class_counts[cls] for cls in train_dataset.classes])
+    weights = 1.0 / class_counts
+    sample_weights = weights[train_dataset.targets]
+
+    sampler = torch.utils.data.WeightedRandomSampler(
+        weights=sample_weights,
+        num_samples=len(train_dataset),
+        replacement=True
+    )
+
+
+    # Modify the DataLoader to use the sampler
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["training"]["batch_size"],
-        shuffle=True
+        sampler=sampler,  # Add sampler
+        num_workers=config["training"]["num_workers"],
+        pin_memory=True
     )
+
+    # After creating the train_loader
+    verify_batch_distribution(train_loader, len(train_dataset.classes))
 
     # Verify batch contents - Modified to handle both string and tensor paths
     sample_batch_images, sample_batch_labels = next(iter(train_loader))
