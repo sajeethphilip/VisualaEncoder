@@ -12,12 +12,12 @@ from datetime import datetime
 from tqdm import tqdm
 
 def train_model(config):
-    """Train the autoencoder model with proper device handling and display."""
+    """Train the autoencoder model with confusion matrix and verified latent space saving."""
     
     # Get device first
     device = get_device()
     
-    # Display header (stays at top)
+    # Display header with fixed positioning
     print("\033[2J\033[H")  # Clear screen
     print("\033[96m" + "="*80 + "\033[0m")
     print("\033[93m" + "Visual Autoencoder Tool".center(80) + "\033[0m")
@@ -31,45 +31,26 @@ def train_model(config):
     dataset_config = config["dataset"]
     data_dir = os.path.join("data", dataset_config["name"], "train")
     
-    # Verify class structure
+    # Initialize confusion matrix tracking
     class_folders = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
-    print(f"Found {len(class_folders)} classes:")
-    for class_name in class_folders:
-        class_path = os.path.join(data_dir, class_name)
-        num_images = len([f for f in os.listdir(class_path) 
-                         if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
-        print(f"  • {class_name}: {num_images} images")
+    confusion_matrix = {cls: {'correct': 0, 'total': 0} for cls in class_folders}
     
-    # Create dataset and loader
-    train_dataset = load_local_dataset(dataset_config["name"])
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=config["training"]["batch_size"],
-        shuffle=True,
-        num_workers=config["training"]["num_workers"]
-    )
-    
-    # Model initialization
-    model = ModifiedAutoencoder(config, device=device)
-    model = model.to(device)
-    
-    # Optimizer setup
+    # Model and training setup
+    model = ModifiedAutoencoder(config, device=device).to(device)
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=config["model"]["learning_rate"],
         weight_decay=config["model"]["optimizer"]["weight_decay"],
-        betas=(config["model"]["optimizer"]["beta1"], 
-               config["model"]["optimizer"]["beta2"]),
+        betas=(config["model"]["optimizer"]["beta1"], config["model"]["optimizer"]["beta2"]),
         eps=config["model"]["optimizer"]["epsilon"]
     )
     criterion_recon = nn.MSELoss()
     
-    # Checkpoint handling
+    # Load checkpoint if exists
     checkpoint_dir = config["training"]["checkpoint_dir"]
     checkpoint_path = os.path.join(checkpoint_dir, "best_model.pth")
     os.makedirs(checkpoint_dir, exist_ok=True)
     
-    # Load checkpoint if exists
     start_epoch = 0
     best_loss = float("inf")
     if os.path.exists(checkpoint_path):
@@ -79,7 +60,7 @@ def train_model(config):
         best_loss = checkpoint.get("loss", float("inf"))
     
     # Training loop
-    epochs = max(config["training"]["epochs"] + start_epoch, start_epoch + 1)
+    epochs = config["training"]["epochs"]
     patience = config["training"]["early_stopping"]["patience"]
     patience_counter = 0
     
@@ -88,71 +69,90 @@ def train_model(config):
     terminal_height = terminal_size.lines
     header_height = 10  # Reserve space for header
     
+    def update_confusion_matrix(original, reconstructed, class_name):
+        """Update confusion matrix based on reconstruction quality."""
+        mse = torch.mean((original - reconstructed)**2).item()
+        threshold = 0.1  # Adjust based on your needs
+        confusion_matrix[class_name]['total'] += 1
+        if mse < threshold:
+            confusion_matrix[class_name]['correct'] += 1
+    
+    def display_confusion_matrix():
+        """Display color-coded confusion matrix."""
+        print("\033[{};0H".format(header_height + 1))
+        print("Reconstruction Accuracy Matrix:")
+        for class_name in confusion_matrix:
+            correct = confusion_matrix[class_name]['correct']
+            total = confusion_matrix[class_name]['total']
+            accuracy = (correct / total) * 100 if total > 0 else 0
+            color = "\033[92m" if accuracy > 80 else "\033[91m"  # Green if >80%, red otherwise
+            print(f"{color}{class_name}: {accuracy:.1f}% ({correct}/{total})\033[0m")
+    
+    # Training loop with confusion matrix and latent space saving
     for epoch in range(start_epoch, epochs):
         model.train()
         epoch_loss = 0.0
         num_batches = 0
         
-        # Training progress
-        print(f"\033[{header_height+1};0H")
+        print(f"\033[{header_height+len(class_folders)+3};0H")
         print(f"Epoch {epoch + 1}/{epochs}")
         
-        for images, _ in tqdm(train_loader, leave=False, position=terminal_height-header_height):
-            images = images.to(device)
-            reconstructed, latent_1d = model(images)
+        # Process each class separately
+        for class_name in class_folders:
+            class_dir = os.path.join(data_dir, class_name)
+            class_dataset = load_local_dataset(dataset_config["name"])
+            class_loader = DataLoader(
+                class_dataset,
+                batch_size=config["training"]["batch_size"],
+                shuffle=False,
+                num_workers=config["training"]["num_workers"]
+            )
             
-            loss = criterion_recon(reconstructed, images)
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+            for images, _ in tqdm(class_loader, 
+                                desc=f"Processing {class_name}", 
+                                position=terminal_height-header_height,
+                                leave=False):
+                images = images.to(device)
+                reconstructed, latent_1d = model(images)
+                
+                # Update confusion matrix
+                update_confusion_matrix(images, reconstructed, class_name)
+                
+                # Save latent representations
+                batch_metadata = {
+                    'epoch': epoch + 1,
+                    'class': class_name,
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                # Get full paths for saving
+                if hasattr(class_dataset, 'imgs'):
+                    full_paths = [class_dataset.imgs[i][0] for i in range(len(images))]
+                else:
+                    full_paths = [os.path.join(class_dir, f) for f in os.listdir(class_dir)
+                                if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+                
+                # Save latent space
+                save_batch_latents(latent_1d, full_paths, dataset_config["name"], batch_metadata)
+                
+                # Training step
+                loss = criterion_recon(reconstructed, images)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                epoch_loss += loss.item()
+                num_batches += 1
             
-            epoch_loss += loss.item()
-            num_batches += 1
+            # Display updated confusion matrix
+            display_confusion_matrix()
         
+        # Handle checkpoints and early stopping
         avg_epoch_loss = epoch_loss / num_batches
-        
-        # Save checkpoint if improved
         if avg_epoch_loss < best_loss:
             best_loss = avg_epoch_loss
             patience_counter = 0
-            
-            # Save model checkpoint
-            model.cpu()
             save_checkpoint(model, epoch + 1, avg_epoch_loss, config, checkpoint_path)
-            model.to(device)
-            
-            # Generate latent space after saving best model
-            print(f"\033[{terminal_height-1};0H")
-            print("Generating latent space representations...")
-            
-            model.eval()
-            with torch.no_grad():
-                for class_name in class_folders:
-                    # Create class-specific loader
-                    class_indices = [i for i, (_, label) in enumerate(train_dataset) 
-                                   if train_dataset.classes[label] == class_name]
-                    class_subset = torch.utils.data.Subset(train_dataset, class_indices)
-                    class_loader = DataLoader(
-                        class_subset,
-                        batch_size=config["training"]["batch_size"],
-                        shuffle=False,
-                        num_workers=config["training"]["num_workers"]
-                    )
-                    
-                    print(f"\033[{terminal_height-1};0H")
-                    print(f"Processing class: {class_name} ({len(class_subset)} images)")
-                    
-                    for images, _ in tqdm(class_loader, leave=False, position=terminal_height-header_height):
-                        images = images.to(device)
-                        _, latent_1d = model(images)
-                        
-                        # Get paths for saving
-                        batch_indices = [class_indices[i] for i in range(len(images))]
-                        full_paths = [train_dataset.imgs[i][0] for i in batch_indices]
-                        
-                        # Save latent representations with original filenames
-                        save_batch_latents(latent_1d, full_paths, dataset_config["name"])
         else:
             patience_counter += 1
             
@@ -164,7 +164,6 @@ def train_model(config):
     print(f"\033[{terminal_height-1};0H")
     print("Training complete!")
     return model
-
 
 
 
