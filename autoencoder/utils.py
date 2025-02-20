@@ -46,6 +46,23 @@ from torchvision import transforms
 from PIL import Image
 from autoencoder.model import ModifiedAutoencoder
 
+def verify_latent_saving(dataset_name, class_folders):
+    """Verify that latent space CSV files are properly saved."""
+    base_dir = f"data/{dataset_name}/latent_space/train"
+    saved_files = {cls: [] for cls in class_folders}
+    
+    for class_name in class_folders:
+        class_path = os.path.join(base_dir, class_name)
+        if os.path.exists(class_path):
+            files = [f for f in os.listdir(class_path) if f.endswith('.csv')]
+            saved_files[class_name] = files
+    
+    print("\nLatent Space Saving Summary:")
+    for class_name, files in saved_files.items():
+        print(f"Class {class_name}: {len(files)} CSV files saved")
+    
+    return saved_files
+
 
 def find_first_image(directory):
     """Find the first image file in a directory or its subdirectories."""
@@ -175,20 +192,33 @@ def display_header():
     print("AIRIS, Thelliyoor".center(80))
     print("="*80)
 
-def display_confusion_matrix(class_correct, class_total):
-    """Display color-coded confusion matrix."""
-    print("\033[5;0H")  # Move to line 5
-    classes = list(class_total.keys())
-    matrix_size = len(classes)
+def display_confusion_matrix(model, train_loader, device, header_height):
+    """Display color-coded confusion matrix showing model performance."""
+    model.eval()
+    class_correct = {cls: 0 for cls in train_loader.dataset.classes}
+    class_total = {cls: 0 for cls in train_loader.dataset.classes}
+    
+    with torch.no_grad():
+        for images, labels in train_loader:
+            images = images.to(device)
+            reconstructed, _ = model(images)
+            
+            # Calculate reconstruction accuracy per class
+            for i, label in enumerate(labels):
+                class_name = train_loader.dataset.classes[label]
+                mse = torch.mean((images[i] - reconstructed[i])**2)
+                if mse < 0.1:  # Threshold for "correct" reconstruction
+                    class_correct[class_name] += 1
+                class_total[class_name] += 1
+    
+    # Display matrix below header
+    print(f"\033[{header_height+1};0H")
+    print("\033[96mReconstruction Accuracy Matrix:\033[0m")
+    for class_name in class_correct:
+        accuracy = class_correct[class_name] / class_total[class_name]
+        color = "\033[92m" if accuracy > 0.8 else "\033[91m"  # Green if >80%, else red
+        print(f"{color}{class_name}: {accuracy*100:.1f}%\033[0m")
 
-    # Create color-coded matrix
-    for i in range(matrix_size):
-        row = ""
-        for j in range(matrix_size):
-            accuracy = class_correct[classes[i]] / class_total[classes[i]]
-            color = "\033[92m" if accuracy > 0.8 else "\033[91m"  # Green for good, red for poor
-            row += f"{color}█\033[0m "
-        print(row.center(80))
 
 def update_progress(message, current, total, accuracy=None):
     """Update progress bar at bottom of screen."""
