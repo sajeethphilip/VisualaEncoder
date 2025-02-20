@@ -11,24 +11,25 @@ from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_
 from datetime import datetime
 
 def train_model(config):
-    """Train the autoencoder model with improved confusion matrix handling."""
+    """Train the autoencoder model."""
     device = get_device()
     print(f"Using device: {device}")
-
-    # Get terminal dimensions
-    terminal_height = os.get_terminal_size().lines
-    header_height = 10  # Reserve space for header
-
-    # Display header
-    display_header()
 
     # Dataset setup
     dataset_config = config["dataset"]
     dataset = load_local_dataset(dataset_config["name"])
+    
+    # Create DataLoader with proper batch size
+    train_loader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=config["training"]["batch_size"],
+        shuffle=True,
+        num_workers=4,
+        drop_last=True
+    )
+    
     class_names = dataset.classes
     num_classes = len(class_names)
-
-    # Initialize confusion matrix as FloatTensor for better numeric stability
     confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.float32, device=device)
 
     # Model setup
@@ -44,24 +45,11 @@ def train_model(config):
     for epoch in range(config["training"]["epochs"]):
         model.train()
         running_loss = 0.0
-        
-        # Reset confusion matrix at start of each epoch
         confusion_matrix.zero_()
         
-        for batch_idx, (images, labels) in enumerate(dataset):
-            # Convert images and labels to tensors if they aren't already
-            if not isinstance(images, torch.Tensor):
-                images = torch.tensor(images, dtype=torch.float32)
-            if not isinstance(labels, torch.Tensor):
-                labels = torch.tensor(labels, dtype=torch.long)
-            
-            # Add batch dimension if needed
-            if len(images.shape) == 3:
-                images = images.unsqueeze(0)
-            if len(labels.shape) == 0:
-                labels = labels.unsqueeze(0)
-            
-            # Move to device
+        progress_bar = tqdm(train_loader, desc=f'Epoch {epoch+1}/{config["training"]["epochs"]}')
+        
+        for batch_idx, (images, labels) in enumerate(progress_bar):
             images = images.to(device)
             labels = labels.to(device)
             
@@ -73,37 +61,22 @@ def train_model(config):
                 pred_labels = torch.argmax(latent_1d, dim=1)
                 for t, p in zip(labels, pred_labels):
                     confusion_matrix[t.long(), p.long()] += 1
-            
+
             # Compute loss and optimize
             loss = criterion(reconstructed, images)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            
             running_loss += loss.item()
-            
-            # Save latent representations
-            batch_metadata = {
-                'epoch': epoch + 1,
-                'batch': batch_idx,
-                'loss': loss.item(),
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            # Get image paths (modify according to your dataset structure)
-            batch_paths = [dataset.imgs[i][0] for i in range(len(images))] if hasattr(dataset, 'imgs') else [f"image_{i}" for i in range(len(images))]
-            
-            # Save latents
-            save_batch_latents(latent_1d.detach().cpu(), batch_paths, dataset_config["name"], batch_metadata)
-            
-            # Update displays with static positioning
-            if batch_idx % config.get("display_interval", 10) == 0:
-                avg_loss = running_loss / (batch_idx + 1)
-                # Make sure confusion matrix is converted to numpy array
-                display_confusion_matrix(confusion_matrix, class_names, terminal_height, header_height)
-                update_progress(epoch + 1, batch_idx + 1, len(dataset), avg_loss, terminal_height)
-    
+
+            # Update progress bar
+            progress_bar.set_postfix({'loss': loss.item()})
+
+        # Display confusion matrix after each epoch
+        display_confusion_matrix(confusion_matrix, class_names)
+
     return model
+
 
 
 
