@@ -11,22 +11,6 @@ from autoencoder.utils import  load_checkpoint, load_local_dataset, load_dataset
 from datetime import datetime
 from tqdm import tqdm
 
-def verify_batch_distribution(dataloader, num_classes):
-    """Verify the class distribution in a batch."""
-    class_counts = torch.zeros(num_classes)
-    for batch_idx, (_, labels) in enumerate(dataloader):
-        for label in labels:
-            class_counts[label] += 1
-        if batch_idx == 0:  # Check first batch
-            print("\nFirst batch class distribution:")
-            for class_idx, count in enumerate(class_counts):
-                print(f" Class {class_idx}: {int(count)} images")
-
-    print("\nTotal dataset class distribution:")
-    for class_idx, count in enumerate(class_counts):
-        print(f" Class {class_idx}: {int(count)} images")
-
-
 def train_model(config):
     """Train the autoencoder model with enhanced class folder verification."""
     # Load dataset
@@ -43,33 +27,29 @@ def train_model(config):
 
     # Create dataset with class verification
     train_dataset = load_local_dataset(dataset_config["name"])
-
-    # Initialize class_counts dictionary
-    class_counts = {}
-    for class_name in train_dataset.classes:
-        class_counts[class_name] = sum(1 for _, label in train_dataset if train_dataset.classes[label] == class_name)
-
     print(f"\nDataset classes: {train_dataset.classes}")
     print(f"Class to idx mapping: {train_dataset.class_to_idx}")
 
-    # Create weighted sampler for balanced sampling
-    weights = torch.tensor([1.0/class_counts[train_dataset.classes[label]] for _, label in train_dataset])
+    # Create a weighted sampler for balanced sampling
+    class_counts = torch.tensor([class_counts[cls] for cls in train_dataset.classes])
+    weights = 1.0 / class_counts
+    sample_weights = weights[train_dataset.targets]
+
     sampler = torch.utils.data.WeightedRandomSampler(
-        weights=weights,
+        weights=sample_weights,
         num_samples=len(train_dataset),
         replacement=True
     )
 
+
+    # Modify the DataLoader to use the sampler
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["training"]["batch_size"],
-        sampler=sampler,
+        sampler=sampler,  # Add sampler
         num_workers=config["training"]["num_workers"],
         pin_memory=True
     )
-
-    # After creating the train_loader
-    verify_batch_distribution(train_loader, len(train_dataset.classes))
 
     # Verify batch contents - Modified to handle both string and tensor paths
     sample_batch_images, sample_batch_labels = next(iter(train_loader))
