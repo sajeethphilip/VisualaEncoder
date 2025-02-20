@@ -168,50 +168,43 @@ def save_1d_latent_to_csv(latent_1d, image_path, dataset_name, metadata=None):
 
 
 def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=None):
-    """
-    Save latent representations for a batch of images while maintaining folder hierarchy.
-    """
-    # Initialize class counters if not present in metadata
-    if batch_metadata is None:
-        batch_metadata = {}
-    if 'class_counts' not in batch_metadata:
-        batch_metadata['class_counts'] = {}
+    """Save latent representations with unique identifiers."""
 
-    # Get base directories
+    # Initialize tracking
     base_data_dir = os.path.abspath(f"data/{dataset_name}")
     base_latent_dir = os.path.join(base_data_dir, "latent_space")
 
-    # Process each image in the batch
+    # Create unique batch identifier
+    batch_id = f"epoch_{batch_metadata['epoch']}_batch_{batch_metadata['batch']}"
+
+    # Process each image in batch
     for idx, (latent, path) in enumerate(zip(batch_latents, image_paths)):
         try:
-            # Get the relative path structure
+            # Get proper path structure
             abs_image_path = os.path.abspath(path)
             path_parts = abs_image_path.split(os.sep)
             train_idx = path_parts.index("train")
-
-            # Extract class name
             class_name = path_parts[train_idx + 1]
 
-            # Update class counter
-            batch_metadata['class_counts'][class_name] = batch_metadata['class_counts'].get(class_name, 0) + 1
-
-            relative_structure = os.sep.join(path_parts[train_idx+1:])
-            target_dir = os.path.join(base_latent_dir, "train", os.path.dirname(relative_structure))
+            # Create unique target directory including batch info
+            target_dir = os.path.join(base_latent_dir, "train", class_name)
             os.makedirs(target_dir, exist_ok=True)
 
-            # Save latent values with metadata
-            filename = os.path.splitext(os.path.basename(path))[0]
-            csv_path = os.path.join(target_dir, f"{filename}.csv")
+            # Create unique filename using batch and image info
+            original_filename = os.path.splitext(os.path.basename(path))[0]
+            unique_filename = f"{original_filename}_{batch_id}.csv"
+            csv_path = os.path.join(target_dir, unique_filename)
 
+            # Save with metadata
             metadata = {
-                'batch_idx': idx,
-                'epoch': batch_metadata.get('epoch', 0),
-                'batch': batch_metadata.get('batch', 0),
+                'batch_id': batch_id,
+                'image_idx': idx,
                 'class': class_name,
-                'timestamp': datetime.now().isoformat(),
                 'original_path': path,
-                'relative_path': relative_structure
+                'timestamp': datetime.now().isoformat()
             }
+            if batch_metadata:
+                metadata.update(batch_metadata)
 
             latent_values = latent.detach().cpu().numpy().flatten()
             data = {
@@ -226,13 +219,6 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
         except Exception as e:
             print(f"Error saving latent for {path}: {str(e)}")
             continue
-
-    # Print summary after each batch
-    print("\nLatent space saving summary for this batch:")
-    for class_name, count in batch_metadata['class_counts'].items():
-        print(f"  • {class_name}: {count} files")
-
-    return batch_metadata['class_counts']
 
 
 
