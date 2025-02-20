@@ -11,15 +11,13 @@ from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_
 from datetime import datetime
 
 def train_model(config):
-    """Train the autoencoder model with improved confusion matrix handling."""
+    """Train the autoencoder model with complete latent space generation after each epoch."""
     device = get_device()
     print(f"Using device: {device}")
 
     # Get terminal dimensions
     terminal_height = os.get_terminal_size().lines
     header_height = 10  # Reserve space for header
-
-    # Display header
     display_header()
 
     # Dataset setup
@@ -28,7 +26,7 @@ def train_model(config):
     class_names = dataset.classes
     num_classes = len(class_names)
 
-    # Initialize confusion matrix as FloatTensor for better numeric stability
+    # Initialize confusion matrix
     confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.float32, device=device)
 
     # Model setup
@@ -44,66 +42,86 @@ def train_model(config):
     for epoch in range(config["training"]["epochs"]):
         model.train()
         running_loss = 0.0
-        
-        # Reset confusion matrix at start of each epoch
         confusion_matrix.zero_()
-        
+
+        # Regular training loop
         for batch_idx, (images, labels) in enumerate(dataset):
-            # Convert images and labels to tensors if they aren't already
             if not isinstance(images, torch.Tensor):
                 images = torch.tensor(images, dtype=torch.float32)
             if not isinstance(labels, torch.Tensor):
                 labels = torch.tensor(labels, dtype=torch.long)
-            
-            # Add batch dimension if needed
+
             if len(images.shape) == 3:
                 images = images.unsqueeze(0)
             if len(labels.shape) == 0:
                 labels = labels.unsqueeze(0)
-            
-            # Move to device
+
             images = images.to(device)
             labels = labels.to(device)
-            
-            # Forward pass
+
             reconstructed, latent_1d = model(images)
-            
+
             # Update confusion matrix
             with torch.no_grad():
                 pred_labels = torch.argmax(latent_1d, dim=1)
                 for t, p in zip(labels, pred_labels):
                     confusion_matrix[t.long(), p.long()] += 1
-            
-            # Compute loss and optimize
+
             loss = criterion(reconstructed, images)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            
             running_loss += loss.item()
-            
-            # Save latent representations
-            batch_metadata = {
-                'epoch': epoch + 1,
-                'batch': batch_idx,
-                'loss': loss.item(),
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            # Get image paths (modify according to your dataset structure)
-            batch_paths = [dataset.imgs[i][0] for i in range(len(images))] if hasattr(dataset, 'imgs') else [f"image_{i}" for i in range(len(images))]
-            
-            # Save latents
-            save_batch_latents(latent_1d.detach().cpu(), batch_paths, dataset_config["name"], batch_metadata)
-            
-            # Update displays with static positioning
+
             if batch_idx % config.get("display_interval", 10) == 0:
                 avg_loss = running_loss / (batch_idx + 1)
-                # Make sure confusion matrix is converted to numpy array
                 display_confusion_matrix(confusion_matrix, class_names, terminal_height, header_height)
-                update_progress(epoch + 1, batch_idx + 1, len(dataset), avg_loss, terminal_height)
-    
+                print(f"Epoch: {epoch+1}/{config['training']['epochs']} | Batch: {batch_idx+1}/348 | Loss: {avg_loss:.4f}")
+
+        # After each epoch, generate and save latent representations for all classes
+        print(f"\nGenerating latent representations for epoch {epoch+1}...")
+        model.eval()
+        
+        # Process each class separately
+        for class_idx, class_name in enumerate(class_names):
+            class_path = os.path.join(dataset_config["train_dir"], class_name)
+            latent_dir = os.path.join(f"data/{dataset_config['name']}/latent_space/train", class_name)
+            recon_dir = os.path.join(f"data/{dataset_config['name']}/reconstructed_images/train", class_name)
+            
+            os.makedirs(latent_dir, exist_ok=True)
+            os.makedirs(recon_dir, exist_ok=True)
+
+            # Get all images in the class
+            class_files = [f for f in os.listdir(class_path) if f.endswith(('.png', '.jpg', '.jpeg'))]
+            
+            for img_file in class_files:
+                img_path = os.path.join(class_path, img_file)
+                img = Image.open(img_path)
+                img_tensor = transforms.ToTensor()(img).unsqueeze(0).to(device)
+
+                with torch.no_grad():
+                    reconstructed, latent_1d = model(img_tensor)
+
+                    # Save latent representation
+                    base_name = os.path.splitext(img_file)[0]
+                    latent_path = os.path.join(latent_dir, f"{base_name}.csv")
+                    metadata = {
+                        'epoch': epoch + 1,
+                        'class': class_name,
+                        'filename': img_file,
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    save_1d_latent_to_csv(latent_1d, img_path, dataset_config["name"], metadata)
+
+                    # Save reconstructed image
+                    recon_path = os.path.join(recon_dir, img_file)
+                    recon_img = transforms.ToPILImage()(reconstructed.squeeze(0).cpu())
+                    recon_img.save(recon_path)
+
+        print(f"Completed epoch {epoch+1} with latent space generation and reconstruction")
+
     return model
+
 
 def save_final_representations(model, loader, device, dataset_name):
     """Save the final latent space and embeddings."""
