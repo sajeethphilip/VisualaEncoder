@@ -17,27 +17,24 @@ def train_model(config):
     # Get terminal size and reserve space for header
     terminal_size = os.get_terminal_size()
     terminal_height = terminal_size.lines
-    header_height = 8  # Reserve space for header
+    header_height = 10  # Increased space for header
     
-    # Display header (stays at top)
+    # Clear screen and display header
     print("\033[2J\033[H")  # Clear screen
+    print("\033[96m" + "="*80)
+    print("\033[93m" + "Visual Autoencoder Tool".center(80))
+    print("\033[96m" + "="*80)
+    print("\033[97m" + "Author: ".rjust(40) + "\033[93m" + "Ninan Sajeeth Philip")
+    print("\033[97m" + "Organisation: ".rjust(40) + "\033[92m" + "AIRIS")
+    print("\033[92m" + "Thelliyoor".center(80))
     print("\033[96m" + "="*80 + "\033[0m")
-    print("\033[93m" + "Visual Autoencoder Tool".center(80) + "\033[0m")
-    print("\033[96m" + "="*80 + "\033[0m")
-    print("\033[97m" + "Author: ".rjust(40) + "\033[93m" + "Ninan Sajeeth Philip" + "\033[0m")
-    print("\033[97m" + "Organisation: ".rjust(40) + "\033[92m" + "AIRIS" + "\033[0m")
-    print("\033[92m" + "Thelliyoor".rjust(40) + "\033[0m")
-    print("\033[96m" + "="*80 + "\033[0m")
-    
-    # Move cursor below header
-    print(f"\033[{header_height};0H")
     
     # Initial setup
     device = get_device()
     dataset_config = config["dataset"]
     data_dir = os.path.join("data", dataset_config["name"], "train")
     
-    # Load dataset and create training loader
+    # Create dataset and loader
     train_dataset = load_local_dataset(dataset_config["name"])
     train_loader = DataLoader(
         train_dataset,
@@ -46,9 +43,9 @@ def train_model(config):
         num_workers=config["training"]["num_workers"]
     )
     
-    # Model setup - ensure model and all its weights are on GPU
+    # Model setup - ensure everything is on GPU
     model = ModifiedAutoencoder(config, device=device)
-    model = model.to(device)  # Move model to device
+    model = model.to(device)
     
     # Explicitly move all model parameters to device
     for param in model.parameters():
@@ -75,6 +72,7 @@ def train_model(config):
     if os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
+        model = model.to(device)  # Ensure model is on GPU after loading
         start_epoch = checkpoint.get("epoch", 0)
         best_loss = checkpoint.get("loss", float("inf"))
     
@@ -83,12 +81,10 @@ def train_model(config):
     patience = config["training"]["early_stopping"]["patience"]
     patience_counter = 0
     
+    # Position cursor below header for epoch information
+    print(f"\033[{header_height};0H")
+    
     for epoch in range(start_epoch, epochs):
-        # Position cursor below header for epoch information
-        print(f"\033[{header_height+1};0H")
-        print(f"Epoch {epoch + 1}/{epochs}")
-        
-        # Training phase
         model.train()
         epoch_loss = 0.0
         num_batches = 0
@@ -96,7 +92,7 @@ def train_model(config):
         # Position progress bar at bottom of screen
         print(f"\033[{terminal_height-2};0H")
         
-        for images, _ in tqdm(train_loader, leave=False, position=terminal_height-2):
+        for images, _ in tqdm(train_loader, leave=False, position=terminal_height-header_height):
             images = images.to(device)
             reconstructed, _ = model(images)
             
@@ -110,20 +106,18 @@ def train_model(config):
         
         avg_epoch_loss = epoch_loss / num_batches
         
-        # Save checkpoint if improved
         if avg_epoch_loss < best_loss:
             best_loss = avg_epoch_loss
             patience_counter = 0
             save_checkpoint(model, epoch + 1, avg_epoch_loss, config, checkpoint_path)
             
-            # Generate latent space after saving best model
+            # Generate latent space class by class
             print(f"\033[{terminal_height-1};0H")
             print("Generating latent space representations...")
             
             model.eval()
             with torch.no_grad():
                 for class_name in train_dataset.classes:
-                    # Create class-specific loader
                     class_indices = [i for i, (_, label) in enumerate(train_dataset) 
                                    if train_dataset.classes[label] == class_name]
                     class_subset = torch.utils.data.Subset(train_dataset, class_indices)
@@ -137,7 +131,7 @@ def train_model(config):
                     print(f"\033[{terminal_height-1};0H")
                     print(f"Processing class: {class_name} ({len(class_subset)} images)")
                     
-                    for images, _ in tqdm(class_loader, leave=False, position=terminal_height-2):
+                    for images, _ in tqdm(class_loader, leave=False, position=terminal_height-header_height):
                         images = images.to(device)
                         _, latent_1d = model(images)
                         
@@ -155,6 +149,7 @@ def train_model(config):
     print(f"\033[{terminal_height-1};0H")
     print("Training complete!")
     return model
+
 
 
 
