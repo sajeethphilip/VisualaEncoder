@@ -62,7 +62,31 @@ def verify_latent_saving(dataset_name, class_folders):
         print(f"Class {class_name}: {len(files)} CSV files saved")
     
     return saved_files
-
+    
+def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
+    """
+    Update confusion matrix based on reconstruction quality.
+    
+    Args:
+        original: Original images batch tensor
+        reconstructed: Reconstructed images batch tensor
+        true_class: True class labels
+        confusion_matrix: The confusion matrix tensor
+        threshold: MSE threshold for considering reconstruction successful
+    """
+    with torch.no_grad():
+        # Compute MSE for each image in batch
+        mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
+        
+        # Determine predicted class based on reconstruction quality
+        pred_class = torch.where(mse < threshold, true_class, -1)
+        
+        # Update confusion matrix
+        for t, p in zip(true_class, pred_class):
+            if p != -1:  # Only count if reconstruction was good enough
+                confusion_matrix[t][p] += 1
+            else:
+                confusion_matrix[t][t] -= 1  # Count as misclassification
 
 def find_first_image(directory):
     """Find the first image file in a directory or its subdirectories."""
@@ -192,33 +216,61 @@ def display_header():
     print("AIRIS, Thelliyoor".center(80))
     print("="*80)
 
-def display_confusion_matrix(model, train_loader, device, header_height):
-    """Display color-coded confusion matrix showing model performance."""
-    model.eval()
-    class_correct = {cls: 0 for cls in train_loader.dataset.classes}
-    class_total = {cls: 0 for cls in train_loader.dataset.classes}
+def display_confusion_matrix(confusion_matrix, class_names, terminal_height, header_height):
+    """
+    Display confusion matrix with static positioning.
     
-    with torch.no_grad():
-        for images, labels in train_loader:
-            images = images.to(device)
-            reconstructed, _ = model(images)
-            
-            # Calculate reconstruction accuracy per class
-            for i, label in enumerate(labels):
-                class_name = train_loader.dataset.classes[label]
-                mse = torch.mean((images[i] - reconstructed[i])**2)
-                if mse < 0.1:  # Threshold for "correct" reconstruction
-                    class_correct[class_name] += 1
-                class_total[class_name] += 1
-    
-    # Display matrix below header
-    print(f"\033[{header_height+1};0H")
-    print("\033[96mReconstruction Accuracy Matrix:\033[0m")
-    for class_name in class_correct:
-        accuracy = class_correct[class_name] / class_total[class_name]
-        color = "\033[92m" if accuracy > 0.8 else "\033[91m"  # Green if >80%, else red
-        print(f"{color}{class_name}: {accuracy*100:.1f}%\033[0m")
+    Args:
+        confusion_matrix: The confusion matrix tensor
+        class_names: List of class names
+        terminal_height: Total terminal height
+        header_height: Height of the header section
+    """
+    # Calculate accuracies
+    correct = confusion_matrix.diag()
+    total = confusion_matrix.sum(1)
+    accuracies = (correct / total) * 100
 
+    # Clear the confusion matrix display area
+    print(f"\033[{header_height};0H")
+    print("\033[J")  # Clear from cursor to end of screen
+    
+    # Print header
+    print("\033[96mReconstruction Accuracy Matrix:\033[0m")
+    
+    # Print matrix with colors
+    for i, class_name in enumerate(class_names):
+        accuracy = accuracies[i].item()
+        color = "\033[92m" if accuracy > 80 else "\033[93m" if accuracy > 60 else "\033[91m"
+        print(f"{color}{class_name:<15} {accuracy:>6.1f}% ({correct[i]:>4d}/{total[i]:>4d})\033[0m")
+
+    # Return cursor to a safe position
+    print(f"\033[{terminal_height};0H")
+
+def update_progress_bar(epoch, batch, total_batches, loss, terminal_height):
+    """
+    Update progress bar with static positioning.
+    
+    Args:
+        epoch: Current epoch number
+        batch: Current batch number
+        total_batches: Total number of batches
+        loss: Current loss value
+        terminal_height: Terminal height for positioning
+    """
+    bar_width = 50
+    progress = batch / total_batches
+    filled = int(bar_width * progress)
+    bar = "█" * filled + "-" * (bar_width - filled)
+    
+    # Position cursor and clear line
+    print(f"\033[{terminal_height-2};0H\033[K", end="")
+    print(f"Epoch {epoch}: [{bar}] {batch}/{total_batches} Loss: {loss:.4f}")
+    
+def create_confusion_matrix(num_classes):
+    """Initialize a proper confusion matrix."""
+    return torch.zeros((num_classes, num_classes), dtype=torch.long)
+    
 
 def update_progress(message, current, total, accuracy=None):
     """Update progress bar at bottom of screen."""
@@ -235,8 +287,16 @@ def update_progress(message, current, total, accuracy=None):
         print(f"{message}: [{bar}] {current}/{total}", end="\r")
 
 
-def save_batch_latents(batch_latents, image_paths, dataset_name):
-    """Save latent representations with original filenames."""
+def save_batch_latents(batch_latents, image_paths, dataset_name, metadata=None):
+    """
+    Save latent representations with original filenames and metadata.
+    
+    Args:
+        batch_latents: Tensor of latent representations
+        image_paths: List of paths to original images
+        dataset_name: Name of the dataset
+        metadata: Optional dictionary containing additional metadata
+    """
     base_latent_dir = os.path.join(f"data/{dataset_name}", "latent_space")
 
     for latent, path in zip(batch_latents, image_paths):
@@ -249,9 +309,16 @@ def save_batch_latents(batch_latents, image_paths, dataset_name):
         filename = os.path.splitext(os.path.basename(path))[0]
         csv_path = os.path.join(target_dir, f"{filename}.csv")
 
-        # Save latent values
-        latent_values = latent.detach().cpu().numpy().flatten()
-        df = pd.DataFrame({'values': latent_values})
+        # Prepare data for CSV
+        data = {
+            'type': ['metadata'] * (len(metadata) if metadata else 0) + ['latent_values'],
+            'key': (list(metadata.keys()) if metadata else []) + ['values'],
+            'value': (list(map(str, metadata.values())) if metadata else []) + 
+                    [','.join(map(str, latent.detach().cpu().numpy().flatten()))]
+        }
+        
+        # Save as DataFrame
+        df = pd.DataFrame(data)
         df.to_csv(csv_path, index=False)
 
 
