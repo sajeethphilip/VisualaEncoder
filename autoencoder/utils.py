@@ -166,6 +166,7 @@ def save_1d_latent_to_csv(latent_1d, image_path, dataset_name, metadata=None):
     df.to_csv(csv_path, index=False)
     return csv_path
 
+
 def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=None):
     """
     Save latent representations for a batch of images while maintaining folder hierarchy.
@@ -184,37 +185,64 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
     if len(batch_latents) != len(image_paths):
         raise ValueError(f"Number of latents ({len(batch_latents)}) does not match number of paths ({len(image_paths)})")
 
+    # Get base directories
+    base_data_dir = os.path.abspath(f"data/{dataset_name}")
+    base_latent_dir = os.path.join(base_data_dir, "latent_space")
+
     # Process each image in the batch
     for idx, (latent, path) in enumerate(zip(batch_latents, image_paths)):
-        # Extract the original filename from the path
-        filename = os.path.basename(path)
-        base_filename = os.path.splitext(filename)[0]
-
-        # Create metadata for this specific image
-        metadata = {
-            'batch_idx': idx,
-            'timestamp': datetime.now().isoformat(),
-            'original_path': path,
-            'filename': filename
-        }
-
-        # Add any batch-level metadata
-        if batch_metadata:
-            metadata.update(batch_metadata)
-
         try:
-            # Save individual latent representation
-            csv_path = save_1d_latent_to_csv(
-                latent,
-                path,
-                dataset_name,
-                metadata
-            )
+            # Get the relative path structure
+            abs_image_path = os.path.abspath(path)
+
+            # Extract class name and other path components
+            path_parts = abs_image_path.split(os.sep)
+            train_idx = path_parts.index("train")
+            relative_structure = os.sep.join(path_parts[train_idx+1:])
+
+            # Create the target directory maintaining the class structure
+            target_dir = os.path.join(base_latent_dir, "train", os.path.dirname(relative_structure))
+            os.makedirs(target_dir, exist_ok=True)
+
+            # Create metadata for this specific image
+            metadata = {
+                'batch_idx': idx,
+                'timestamp': datetime.now().isoformat(),
+                'original_path': path,
+                'relative_path': relative_structure
+            }
+
+            # Add any batch-level metadata
+            if batch_metadata:
+                metadata.update(batch_metadata)
+
+            # Get original filename without extension
+            filename = os.path.splitext(os.path.basename(path))[0]
+
+            # Create and save CSV file
+            csv_path = os.path.join(target_dir, f"{filename}.csv")
+
+            # Convert latent values to numpy and flatten
+            latent_values = latent.detach().cpu().numpy().flatten()
+
+            # Create DataFrame with metadata and latent values
+            data = {
+                'type': ['metadata'] * len(metadata) + ['latent_values'],
+                'key': list(metadata.keys()) + ['values'],
+                'value': list(map(str, metadata.values())) + [','.join(map(str, latent_values))]
+            }
+
+            df = pd.DataFrame(data)
+            df.to_csv(csv_path, index=False)
+
             if idx == 0:  # Print first save location as confirmation
-                print(f"Saving batch latents to directory: {os.path.dirname(csv_path)}")
+                print(f"Saving batch latents to directory: {target_dir}")
 
         except Exception as e:
             print(f"Error saving latent for {path}: {str(e)}")
+            continue
+
+
 def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
     """
     Reconstruct images from latent CSV files maintaining the original folder hierarchy.
