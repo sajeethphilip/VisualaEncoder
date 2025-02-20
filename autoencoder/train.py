@@ -12,6 +12,8 @@ from datetime import datetime
 from tqdm import tqdm
 
 def train_model(config):
+    display_header()
+
     """Train the autoencoder model with separate latent space generation."""
 
     # Initial setup
@@ -26,8 +28,7 @@ def train_model(config):
         class_path = os.path.join(data_dir, class_name)
         num_images = len([f for f in os.listdir(class_path)
                          if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
-        print(f"  • {class_name}: {num_images} images")    display_header()
-
+        print(f"  • {class_name}: {num_images} images")
     # Initialize tracking
     class_correct = {cls: 0 for cls in class_folders}
     class_total = {cls: 0 for cls in class_folders}
