@@ -118,21 +118,21 @@ class ModifiedAutoencoder(nn.Module):
         self.adaptive_upsample = nn.Upsample(size=self.input_size, mode='bilinear', align_corners=False)
 
     def forward(self, x):
-        # Encode
+        print(f"Input shape: {x.shape}")  # Debugging
         x = self.encoder(x)
-        x_flat = x.view(x.size(0), -1)  # (batch_size, 512)
-
-        # Map to 1D using cosine transformation
-        latent_1d = self.latent_mapper.forward_map(x_flat)  # (batch_size, 1)
-
-        # Map back to 512D
-        decoded_flat = self.latent_mapper.inverse_map(latent_1d)  # (batch_size, 512)
-
-        # Reshape and decode
+        print(f"After encoder: {x.shape}")  # Debugging
+        x_flat = x.view(x.size(0), -1)  # (batch_size, feature_dims)
+        print(f"After flattening: {x_flat.shape}")  # Debugging
+        latent_1d = self.latent_mapper.forward_map(x_flat)
+        print(f"After latent mapping: {latent_1d.shape}")  # Debugging
+        decoded_flat = self.latent_mapper.inverse_map(latent_1d)
+        print(f"After inverse mapping: {decoded_flat.shape}")  # Debugging
         decoded_volume = decoded_flat.view(x.size(0), self.feature_dims, 1, 1)
+        print(f"After reshaping: {decoded_volume.shape}")  # Debugging
         reconstructed = self.decoder(decoded_volume)
+        print(f"After decoder: {reconstructed.shape}")  # Debugging
         reconstructed = self.adaptive_upsample(reconstructed)
-
+        print(f"After upsampling: {reconstructed.shape}")  # Debugging
         return reconstructed, latent_1d
 
 class Autoencoder(nn.Module):
