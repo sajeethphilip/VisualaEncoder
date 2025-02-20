@@ -6,106 +6,47 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from autoencoder.model import Autoencoder,ModifiedAutoencoder
-from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv,save_checkpoint
-from autoencoder.utils import  load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv,save_batch_latents
+from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv,save_checkpoint,update_progress,display_confusion_matrix
+from autoencoder.utils import  load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv,save_batch_latents,display_header
 from datetime import datetime
 from tqdm import tqdm
 
 def train_model(config):
-    """Train the autoencoder model with separate latent space generation."""
+    display_header()
 
-    # Initial setup
-    device = get_device()
-    dataset_config = config["dataset"]
-    data_dir = os.path.join("data", dataset_config["name"], "train")
-
-    # Create dataset and loader for training
-    train_dataset = load_local_dataset(dataset_config["name"])
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=config["training"]["batch_size"],
-        shuffle=True,
-        num_workers=config["training"]["num_workers"]
-    )
-
-    # Model setup
-    model = ModifiedAutoencoder(config, device=device).to(device)
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=config["model"]["learning_rate"],
-        weight_decay=config["model"]["optimizer"]["weight_decay"],
-        betas=(config["model"]["optimizer"]["beta1"], config["model"]["optimizer"]["beta2"]),
-        eps=config["model"]["optimizer"]["epsilon"]
-    )
-    criterion_recon = nn.MSELoss()
+    # Initialize tracking
+    class_correct = {cls: 0 for cls in class_folders}
+    class_total = {cls: 0 for cls in class_folders}
 
     # Training loop
-    print("\nStarting training...")
-    for epoch in range(config["training"]["epochs"]):
+    for epoch in range(epochs):
         model.train()
-        epoch_loss = 0.0
 
-        for batch_idx, (images, _) in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch + 1}")):
-            images = images.to(device)
-            reconstructed, _ = model(images)
-            loss = criterion_recon(reconstructed, images)
+        # Process each class separately for latent space generation
+        for class_name in class_folders:
+            message = f"Processing class: {class_name}"
+            update_progress(message, 0, class_total[class_name])
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            epoch_loss += loss.item()
-
-        avg_epoch_loss = epoch_loss / len(train_loader)
-        print(f"\nEpoch [{epoch + 1}] Average Loss: {avg_epoch_loss:.4f}")
-
-        # After each epoch, generate latent space representations class by class
-        print("\nGenerating latent space representations...")
-        model.eval()
-
-        # Create separate loaders for each class
-        for class_idx, class_name in enumerate(train_dataset.classes):
-            # Filter dataset for current class
-            class_indices = [i for i, (_, label) in enumerate(train_dataset) if label == class_idx]
+            class_indices = [i for i, (_, label) in enumerate(train_dataset)
+                           if train_dataset.classes[label] == class_name]
             class_subset = torch.utils.data.Subset(train_dataset, class_indices)
+            class_loader = DataLoader(class_subset, batch_size=batch_size, shuffle=False)
 
-            # Create non-shuffling loader for this class
-            class_loader = DataLoader(
-                class_subset,
-                batch_size=config["training"]["batch_size"],
-                shuffle=False,
-                num_workers=config["training"]["num_workers"]
-            )
+            for batch_idx, (images, _) in enumerate(class_loader):
+                # Training step
+                reconstructed, latent_1d = model(images)
 
-            print(f"\nProcessing class: {class_name} ({len(class_subset)} images)")
+                # Save latent representations
+                batch_paths = [train_dataset.imgs[i][0] for i in class_indices[batch_idx*batch_size:
+                             (batch_idx+1)*batch_size]]
+                save_batch_latents(latent_1d, batch_paths, dataset_name)
 
-            with torch.no_grad():
-                for batch_idx, (images, _) in enumerate(tqdm(class_loader, desc=f"Generating latents for {class_name}")):
-                    # Get full paths for images in this batch
-                    batch_start_idx = batch_idx * config["training"]["batch_size"]
-                    batch_indices = class_indices[batch_start_idx:batch_start_idx + len(images)]
-                    full_paths = [train_dataset.imgs[idx][0] for idx in batch_indices]
+                # Update progress and confusion matrix
+                current = (batch_idx + 1) * batch_size
+                accuracy = class_correct[class_name] / class_total[class_name] * 100
+                update_progress(message, current, class_total[class_name], accuracy)
+                display_confusion_matrix(class_correct, class_total)
 
-                    # Generate latent representations
-                    images = images.to(device)
-                    reconstructed, latent_1d = model(images)
-
-                    # Save latent representations
-                    batch_metadata = {
-                        'epoch': epoch + 1,
-                        'class': class_name,
-                        'batch': batch_idx,
-                        'timestamp': datetime.now().isoformat()
-                    }
-                    save_batch_latents(latent_1d, full_paths, dataset_config["name"], batch_metadata)
-
-                    # Save reconstructed images if needed
-                    # Add code here to save reconstructed images
-
-        print(f"\nCompleted epoch {epoch + 1} with latent space generation")
-
-    print("\nTraining complete!")
-    return model
 
 
 

@@ -165,60 +165,65 @@ def save_1d_latent_to_csv(latent_1d, image_path, dataset_name, metadata=None):
     df = pd.DataFrame(data)
     df.to_csv(csv_path, index=False)
     return csv_path
+def display_header():
+    """Display fixed header with title and author info."""
+    print("\033[2J\033[H")  # Clear screen
+    print("="*80)
+    print("Visual Autoencoder Tool".center(80))
+    print("="*80)
+    print("Author: Ninan Sajeeth Philip".center(80))
+    print("AIRIS, Thelliyoor".center(80))
+    print("="*80)
+
+def display_confusion_matrix(class_correct, class_total):
+    """Display color-coded confusion matrix."""
+    print("\033[5;0H")  # Move to line 5
+    classes = list(class_total.keys())
+    matrix_size = len(classes)
+
+    # Create color-coded matrix
+    for i in range(matrix_size):
+        row = ""
+        for j in range(matrix_size):
+            accuracy = class_correct[classes[i]] / class_total[classes[i]]
+            color = "\033[92m" if accuracy > 0.8 else "\033[91m"  # Green for good, red for poor
+            row += f"{color}█\033[0m "
+        print(row.center(80))
+
+def update_progress(message, current, total, accuracy=None):
+    """Update progress bar at bottom of screen."""
+    print(f"\033[{terminal_height};0H")  # Move to bottom
+    print("\033[K", end="")  # Clear line
+
+    bar_width = 60
+    filled = int(bar_width * current / total)
+    bar = "█" * filled + "-" * (bar_width - filled)
+
+    if accuracy is not None:
+        print(f"{message}: [{bar}] {current}/{total} (Accuracy: {accuracy:.2f}%)", end="\r")
+    else:
+        print(f"{message}: [{bar}] {current}/{total}", end="\r")
 
 
-def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=None):
-    """Save latent representations with unique identifiers."""
+def save_batch_latents(batch_latents, image_paths, dataset_name):
+    """Save latent representations with original filenames."""
+    base_latent_dir = os.path.join(f"data/{dataset_name}", "latent_space")
 
-    # Initialize tracking
-    base_data_dir = os.path.abspath(f"data/{dataset_name}")
-    base_latent_dir = os.path.join(base_data_dir, "latent_space")
+    for latent, path in zip(batch_latents, image_paths):
+        # Maintain original filename and structure
+        rel_path = os.path.relpath(path, f"data/{dataset_name}/train")
+        target_dir = os.path.join(base_latent_dir, os.path.dirname(rel_path))
+        os.makedirs(target_dir, exist_ok=True)
 
-    # Create unique batch identifier
-    batch_id = f"epoch_{batch_metadata['epoch']}_batch_{batch_metadata['batch']}"
+        # Use original filename for CSV
+        filename = os.path.splitext(os.path.basename(path))[0]
+        csv_path = os.path.join(target_dir, f"{filename}.csv")
 
-    # Process each image in batch
-    for idx, (latent, path) in enumerate(zip(batch_latents, image_paths)):
-        try:
-            # Get proper path structure
-            abs_image_path = os.path.abspath(path)
-            path_parts = abs_image_path.split(os.sep)
-            train_idx = path_parts.index("train")
-            class_name = path_parts[train_idx + 1]
+        # Save latent values
+        latent_values = latent.detach().cpu().numpy().flatten()
+        df = pd.DataFrame({'values': latent_values})
+        df.to_csv(csv_path, index=False)
 
-            # Create unique target directory including batch info
-            target_dir = os.path.join(base_latent_dir, "train", class_name)
-            os.makedirs(target_dir, exist_ok=True)
-
-            # Create unique filename using batch and image info
-            original_filename = os.path.splitext(os.path.basename(path))[0]
-            unique_filename = f"{original_filename}_{batch_id}.csv"
-            csv_path = os.path.join(target_dir, unique_filename)
-
-            # Save with metadata
-            metadata = {
-                'batch_id': batch_id,
-                'image_idx': idx,
-                'class': class_name,
-                'original_path': path,
-                'timestamp': datetime.now().isoformat()
-            }
-            if batch_metadata:
-                metadata.update(batch_metadata)
-
-            latent_values = latent.detach().cpu().numpy().flatten()
-            data = {
-                'type': ['metadata'] * len(metadata) + ['latent_values'],
-                'key': list(metadata.keys()) + ['values'],
-                'value': list(map(str, metadata.values())) + [','.join(map(str, latent_values))]
-            }
-
-            df = pd.DataFrame(data)
-            df.to_csv(csv_path, index=False)
-
-        except Exception as e:
-            print(f"Error saving latent for {path}: {str(e)}")
-            continue
 
 
 
@@ -335,39 +340,21 @@ def load_1d_latent_from_csv(csv_path):
 
 
 def save_checkpoint(model, epoch, loss, config, checkpoint_path):
-    """Save checkpoint with explicit frequency handling."""
-    # Ensure model is in eval mode and on CPU for saving
+    """Save model checkpoint properly."""
     model.eval()
     model = model.cpu()
 
-    # Verify frequencies exist and initialize if needed
-    if not hasattr(model.latent_mapper, 'frequencies') or model.latent_mapper.frequencies is None:
-        print("Initializing frequencies before saving...")
-        # Assuming latent_mapper has the initialization method
-        model.latent_mapper._initialize_frequencies()
-
-    # Create state dict with explicit frequency saving
-    state_dict = model.state_dict()
-
-    # Verify frequencies are in state dict
-    if 'latent_mapper.frequencies' not in state_dict:
-        state_dict['latent_mapper.frequencies'] = model.latent_mapper.frequencies
-
-    # Save complete checkpoint
+    # Create state dict with all necessary components
     checkpoint = {
         "epoch": epoch,
-        "model_state_dict": state_dict,
-        "frequencies": model.latent_mapper.frequencies,  # Save frequencies separately as well
+        "model_state_dict": model.state_dict(),
         "loss": loss,
-        "config": config
+        "config": config,
+        "frequencies": model.latent_mapper.frequencies
     }
 
-    # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
-
-    # Save checkpoint
     torch.save(checkpoint, checkpoint_path)
-    print(f"Saved checkpoint to {checkpoint_path} with frequencies shape: {model.latent_mapper.frequencies.shape}")
 
 
 def load_checkpoint(checkpoint_path, model, config):
