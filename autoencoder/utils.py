@@ -235,8 +235,8 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
             df = pd.DataFrame(data)
             df.to_csv(csv_path, index=False)
 
-            if idx == 0:  # Print first save location as confirmation
-                print(f"Saving batch latents to directory: {target_dir}")
+            #if idx == 0:  # Print first save location as confirmation
+             #   print(f"Saving batch latents to directory: {target_dir}")
 
         except Exception as e:
             print(f"Error saving latent for {path}: {str(e)}")

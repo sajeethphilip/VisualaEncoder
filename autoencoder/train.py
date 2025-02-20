@@ -12,10 +12,23 @@ from datetime import datetime
 from tqdm import tqdm
 
 def train_model(config):
-    """Train the autoencoder model using the provided configuration."""
+    """Train the autoencoder model with enhanced class folder verification."""
     # Load dataset
     dataset_config = config["dataset"]
+    data_dir = os.path.join("data", dataset_config["name"], "train")
+
+    # Verify and log class structure
+    class_folders = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
+    print(f"\nFound {len(class_folders)} class folders:")
+    for idx, class_name in enumerate(class_folders):
+        class_path = os.path.join(data_dir, class_name)
+        num_images = len([f for f in os.listdir(class_path) if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
+        print(f"  Class {idx}: {class_name} - {num_images} images")
+
+    # Create dataset with class verification
     train_dataset = load_local_dataset(dataset_config["name"])
+    print(f"\nDataset classes: {train_dataset.classes}")
+    print(f"Class to idx mapping: {train_dataset.class_to_idx}")
 
     train_loader = DataLoader(
         train_dataset,
@@ -23,17 +36,35 @@ def train_model(config):
         shuffle=True
     )
 
+    # Verify batch contents - Modified to handle both string and tensor paths
+    sample_batch_images, sample_batch_labels = next(iter(train_loader))
+    class_counts = {}
+
+    # Get paths from dataset.imgs if available
+    if hasattr(train_dataset, 'imgs'):
+        paths = [train_dataset.imgs[i][0] for i in range(len(sample_batch_images))]
+    else:
+        # If no imgs attribute, construct paths from classes and indices
+        paths = [os.path.join(data_dir, train_dataset.classes[label.item()])
+                for label in sample_batch_labels]
+
+    for path in paths:
+        class_name = os.path.basename(os.path.dirname(path))
+        class_counts[class_name] = class_counts.get(class_name, 0) + 1
+
+    print(f"\nSample batch class distribution:")
+    for class_name, count in class_counts.items():
+        print(f"  {class_name}: {count} images")
+
     # Get device and ensure it's set before model creation
     device = get_device()
-    print(f"Using device: {device}")
+    print(f"\nUsing device: {device}")
 
     checkpoint_dir = config["training"]["checkpoint_dir"]
     checkpoint_path = os.path.join(checkpoint_dir, "best_model.pth")
 
     # Initialize model
     model = ModifiedAutoencoder(config, device=device)
-
-    # Initialize model weights on CPU first
     model = model.cpu()
 
     # Global variables
@@ -44,33 +75,20 @@ def train_model(config):
     try:
         if os.path.exists(checkpoint_path):
             print(f"Loading existing checkpoint from {checkpoint_path}")
-            # Load checkpoint to CPU first
             checkpoint = torch.load(checkpoint_path, map_location='cpu')
-
-            # Load model state
             model.load_state_dict(checkpoint["model_state_dict"])
             start_epoch = checkpoint.get("epoch", 0)
             best_loss = checkpoint.get("loss", float("inf"))
-
             print("Checkpoint loaded successfully")
-
-            # Ensure frequencies are loaded
-            if hasattr(model.latent_mapper, 'frequencies'):
-                print(f"Loaded frequencies shape: {model.latent_mapper.frequencies.shape}")
-            else:
-                print("Initializing frequencies...")
-                model.latent_mapper._initialize_frequencies()
         else:
             print("No existing checkpoint found. Starting fresh training...")
-            model.latent_mapper._initialize_frequencies()
+        model.latent_mapper._initialize_frequencies()
     except Exception as e:
         print(f"Error loading checkpoint: {e}")
         print("Starting fresh training...")
         model.latent_mapper._initialize_frequencies()
 
-    # Move model to device after loading checkpoint
     model = model.to(device)
-    print(f"Model moved to {device}")
 
     # Training setup
     optimizer = torch.optim.Adam(
@@ -83,7 +101,7 @@ def train_model(config):
 
     criterion_recon = nn.MSELoss()
 
-    # Training loop
+    # Enhanced training loop with class verification
     epochs = config["training"]["epochs"] + start_epoch
     patience = config["training"]["early_stopping"]["patience"]
     patience_counter = 0
@@ -92,31 +110,34 @@ def train_model(config):
         model.train()
         epoch_loss = 0.0
         num_batches = 0
+        epoch_class_counts = {class_name: 0 for class_name in class_folders}
 
         progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
 
-        for batch_idx, (images, paths) in enumerate(progress_bar):
-            # Get full paths from the dataset
+        for batch_idx, (images, labels) in enumerate(progress_bar):
+            # Get full paths based on class labels
             if hasattr(train_dataset, 'imgs'):
-                # For ImageFolder dataset
                 full_paths = [train_dataset.imgs[i][0] for i in range(len(images))]
             else:
-                # Fallback to paths if imgs not available
-                full_paths = paths
+                full_paths = [os.path.join(data_dir, train_dataset.classes[label.item()])
+                            for label in labels]
+
+            # Update class counts for monitoring
+            for path in full_paths:
+                class_name = os.path.basename(os.path.dirname(path))
+                epoch_class_counts[class_name] += 1
 
             images = images.to(device)
 
             # Forward pass
             reconstructed, latent_1d = model(images)
 
-            # Save latent representations for the batch
+            # Save batch latents with metadata
             batch_metadata = {
                 'epoch': epoch + 1,
                 'batch': batch_idx,
                 'timestamp': datetime.now().isoformat()
             }
-
-            # Save latents for all images in the batch
             save_batch_latents(latent_1d, full_paths, dataset_config["name"], batch_metadata)
 
             # Compute loss and backprop
@@ -136,43 +157,38 @@ def train_model(config):
                 'lr': optimizer.param_groups[0]['lr']
             })
 
-        # Calculate average epoch loss
+        # Print epoch statistics with class distribution
         epoch_loss /= num_batches
-        print(f"Epoch [{epoch + 1}/{epochs}], Loss: {epoch_loss:.4f}, Learning Rate: {optimizer.param_groups[0]['lr']:.6f}")
+        print(f"\nEpoch [{epoch + 1}/{epochs}]")
+        print(f"Loss: {epoch_loss:.4f}")
+        print(f"Learning Rate: {optimizer.param_groups[0]['lr']:.6f}")
+        print("\nClass distribution this epoch:")
+        for class_name, count in epoch_class_counts.items():
+            print(f"  {class_name}: {count} images")
 
         # Save checkpoint if loss improved
         if epoch_loss < best_loss:
             best_loss = epoch_loss
             patience_counter = 0
-
-            # Ensure model is on CPU for saving
             model.cpu()
             os.makedirs(checkpoint_dir, exist_ok=True)
-            save_checkpoint(
-                model,
-                epoch + 1,
-                epoch_loss,
-                config,
-                checkpoint_path
-            )
-            # Move model back to original device
+            save_checkpoint(model, epoch + 1, epoch_loss, config, checkpoint_path)
             model.to(device)
-            print(f"Saved best model checkpoint to {checkpoint_path}")
+            print(f"\nSaved best model checkpoint to {checkpoint_path}")
         else:
             patience_counter += 1
             if patience_counter >= patience:
-                print(f"No improvement for {patience} epochs. Training stopped.")
+                print(f"\nNo improvement for {patience} epochs. Training stopped.")
                 break
 
-        # Ask user to continue if epochs completed
         if epoch + 1 >= epochs:
-            user_input = input("Model still learning. Continue training? (y/n): ").lower()
+            user_input = input("\nModel still learning. Continue training? (y/n): ").lower()
             if user_input == 'y':
                 epochs += 1
             else:
                 break
 
-    print("Training complete.")
+    print("\nTraining complete.")
     return model
 
 def save_final_representations(model, loader, device, dataset_name):
