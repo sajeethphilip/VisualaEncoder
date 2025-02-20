@@ -12,157 +12,122 @@ from datetime import datetime
 from tqdm import tqdm
 
 def train_model(config):
-    """Train the autoencoder model with end-of-epoch latent space saving."""
+    """Train the autoencoder model with enhanced debugging."""
 
     # Load dataset configuration
     dataset_config = config["dataset"]
     data_dir = os.path.join("data", dataset_config["name"], "train")
 
-    # Verify class structure
+    # Debug: Print initial dataset structure
+    print("\n=== Initial Dataset Structure ===")
     class_folders = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
-    print(f"\nFound {len(class_folders)} classes:")
-
-    # Initial class distribution
-    total_images = 0
-    class_counts = {}
+    total_files = 0
     for class_name in class_folders:
         class_path = os.path.join(data_dir, class_name)
-        num_images = len([f for f in os.listdir(class_path)
-                         if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
-        class_counts[class_name] = num_images
-        total_images += num_images
-        print(f"  • {class_name}: {num_images} images ({(num_images/total_images)*100:.1f}%)")
+        files = [f for f in os.listdir(class_path) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        print(f"Class {class_name}: {len(files)} files")
+        total_files += len(files)
+    print(f"Total files in dataset: {total_files}")
 
-    # Create dataset and loaders
+    # Create dataset
     train_dataset = load_local_dataset(dataset_config["name"])
+    print("\n=== Dataset Loading ===")
+    print(f"Dataset length: {len(train_dataset)}")
+    print(f"Classes: {train_dataset.classes}")
+    print(f"Class to idx mapping: {train_dataset.class_to_idx}")
+
+    # Create data loader
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["training"]["batch_size"],
         shuffle=True,
         num_workers=config["training"]["num_workers"]
     )
+    print(f"\n=== DataLoader Configuration ===")
+    print(f"Number of batches: {len(train_loader)}")
+    print(f"Batch size: {config['training']['batch_size']}")
 
-    # Create a separate loader for latent space generation (no shuffling)
-    latent_loader = DataLoader(
-        train_dataset,
-        batch_size=config["training"]["batch_size"],
-        shuffle=False,  # Important: Keep order consistent
-        num_workers=config["training"]["num_workers"]
-    )
+    # Debug: Print sample batch information
+    sample_batch_images, sample_batch_labels = next(iter(train_loader))
+    print("\n=== Sample Batch Information ===")
+    print(f"Batch image shape: {sample_batch_images.shape}")
+    print(f"Batch labels shape: {sample_batch_labels.shape}")
 
-    # Model initialization
+    # Model initialization and training setup
     device = get_device()
-    print(f"\nUsing device: {device}")
+    print(f"\n=== Device and Model Setup ===")
+    print(f"Using device: {device}")
+
     model = ModifiedAutoencoder(config, device=device).to(device)
 
-    # Training setup
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=config["model"]["learning_rate"],
-        weight_decay=config["model"]["optimizer"]["weight_decay"],
-        betas=(config["model"]["optimizer"]["beta1"],
-               config["model"]["optimizer"]["beta2"]),
-        eps=config["model"]["optimizer"]["epsilon"]
-    )
+    # Training loop
+    epochs = config["training"]["epochs"]
+    processed_files = {class_name: 0 for class_name in class_folders}
+    saved_latents = {class_name: 0 for class_name in class_folders}
 
-    criterion_recon = nn.MSELoss()
+    for epoch in range(epochs):
+        print(f"\n=== Epoch {epoch + 1}/{epochs} ===")
+        epoch_processed = {class_name: 0 for class_name in class_folders}
 
-    # Checkpoint handling
-    checkpoint_dir = config["training"]["checkpoint_dir"]
-    checkpoint_path = os.path.join(checkpoint_dir, "best_model.pth")
-    os.makedirs(checkpoint_dir, exist_ok=True)
+        for batch_idx, (images, labels) in enumerate(tqdm(train_loader)):
+            # Debug: Track batch composition
+            batch_classes = [train_dataset.classes[label.item()] for label in labels]
+            class_counts = {cls: batch_classes.count(cls) for cls in set(batch_classes)}
 
-    # Load checkpoint if exists
-    start_epoch = 0
-    best_loss = float("inf")
-    if os.path.exists(checkpoint_path):
-        print(f"\nLoading checkpoint from {checkpoint_path}")
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-        model.load_state_dict(checkpoint["model_state_dict"])
-        start_epoch = checkpoint.get("epoch", 0)
-        best_loss = checkpoint.get("loss", float("inf"))
+            if batch_idx % 10 == 0:  # Print every 10 batches
+                print(f"\nBatch {batch_idx + 1}/{len(train_loader)}:")
+                print("Batch class distribution:", class_counts)
 
-    # Ensure at least one epoch of training
-    epochs = max(config["training"]["epochs"] + start_epoch, start_epoch + 1)
-    patience = config["training"]["early_stopping"]["patience"]
-    patience_counter = 0
+            # Get full paths
+            if hasattr(train_dataset, 'imgs'):
+                full_paths = [train_dataset.imgs[i][0] for i in range(len(images))]
+            else:
+                full_paths = [os.path.join(data_dir, train_dataset.classes[label.item()])
+                            for label in labels]
 
-    print("\nStarting training...")
+            # Update processed files count
+            for class_name, count in class_counts.items():
+                epoch_processed[class_name] += count
+                processed_files[class_name] += count
 
-    for epoch in range(start_epoch, epochs):
-        model.train()
-        epoch_loss = 0.0
-        num_batches = 0
-
-        # Training loop
-        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
-        for images, _ in progress_bar:
+            # Forward pass and save latent space
             images = images.to(device)
-            reconstructed, _ = model(images)
+            reconstructed, latent_1d = model(images)
 
-            loss = criterion_recon(reconstructed, images)
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+            # Save latent representations
+            batch_metadata = {
+                'epoch': epoch + 1,
+                'batch': batch_idx,
+                'timestamp': datetime.now().isoformat()
+            }
 
-            current_loss = loss.item()
-            epoch_loss += current_loss
-            num_batches += 1
+            # Debug: Track latent space saving
+            try:
+                save_batch_latents(latent_1d, full_paths, dataset_config["name"], batch_metadata)
+                for class_name in class_counts.keys():
+                    saved_latents[class_name] += class_counts[class_name]
+            except Exception as e:
+                print(f"Error saving latent space for batch {batch_idx}: {str(e)}")
 
-            progress_bar.set_postfix({
-                'loss': current_loss,
-                'avg_loss': epoch_loss / num_batches
-            })
+        # End of epoch summary
+        print("\n=== Epoch Summary ===")
+        print("Files processed this epoch:")
+        for class_name, count in epoch_processed.items():
+            print(f"{class_name}: {count} files")
 
-        avg_epoch_loss = epoch_loss / num_batches
-        print(f"\nEpoch [{epoch + 1}/{epochs}] - Average Loss: {avg_epoch_loss:.4f}")
+        print("\nTotal files processed so far:")
+        for class_name, count in processed_files.items():
+            print(f"{class_name}: {count} files")
 
-        # Save checkpoint if loss improved
-        if avg_epoch_loss < best_loss:
-            best_loss = avg_epoch_loss
-            patience_counter = 0
-            model.cpu()
-            save_checkpoint(model, epoch + 1, avg_epoch_loss, config, checkpoint_path)
-            model.to(device)
-            print(f"\nSaved best model checkpoint (loss: {best_loss:.4f})")
+        print("\nLatent representations saved:")
+        for class_name, count in saved_latents.items():
+            print(f"{class_name}: {count} files")
 
-            # Generate and save latent space after saving best model
-            print("\nGenerating latent space representations...")
-            model.eval()
-            with torch.no_grad():
-                for batch_idx, (images, _) in enumerate(tqdm(latent_loader, desc="Saving latent space")):
-                    # Get full paths for latent space saving
-                    if hasattr(train_dataset, 'imgs'):
-                        full_paths = [train_dataset.imgs[i][0] for i in range(len(images))]
-                    else:
-                        full_paths = [os.path.join(data_dir, train_dataset.classes[label.item()])
-                                    for label in labels]
-
-                    images = images.to(device)
-                    _, latent_1d = model(images)
-
-                    # Save batch latents with metadata
-                    batch_metadata = {
-                        'epoch': epoch + 1,
-                        'batch': batch_idx,
-                        'model_loss': avg_epoch_loss,
-                        'timestamp': datetime.now().isoformat()
-                    }
-                    save_batch_latents(latent_1d, full_paths, dataset_config["name"], batch_metadata)
-
-            print("\nLatent space saved successfully!")
-        else:
-            patience_counter += 1
-
-        # Early stopping check
-        if patience_counter >= patience:
-            print(f"\nNo improvement for {patience} epochs. Training stopped.")
-            break
-
-    print("\nTraining complete!")
-    return model
-
+    print("\n=== Training Complete ===")
+    print("Final statistics:")
+    print(f"Total files in dataset: {total_files}")
+    print("Total files processed:", sum(processed_files.values()))
+    print("Total latent representations saved:", sum(saved_latents.values()))
 
 
 def train_model_old(config):
