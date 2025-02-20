@@ -170,20 +170,10 @@ def save_1d_latent_to_csv(latent_1d, image_path, dataset_name, metadata=None):
 def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=None):
     """
     Save latent representations for a batch of images while maintaining folder hierarchy.
-
-    Args:
-        batch_latents: Tensor of latent representations (batch_size x latent_dim)
-        image_paths: List of paths to original images
-        dataset_name: String name of the dataset
-        batch_metadata: Optional dictionary of metadata for the batch
     """
-    # Ensure inputs are valid
-    if not isinstance(batch_latents, torch.Tensor):
-        raise ValueError("batch_latents must be a torch.Tensor")
-    if not isinstance(image_paths, (list, tuple)):
-        raise ValueError("image_paths must be a list or tuple")
-    if len(batch_latents) != len(image_paths):
-        raise ValueError(f"Number of latents ({len(batch_latents)}) does not match number of paths ({len(image_paths)})")
+    # Initialize class counters
+    class_counts = {}
+    total_saved = 0
 
     # Get base directories
     base_data_dir = os.path.abspath(f"data/{dataset_name}")
@@ -194,38 +184,37 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
         try:
             # Get the relative path structure
             abs_image_path = os.path.abspath(path)
-
-            # Extract class name and other path components
             path_parts = abs_image_path.split(os.sep)
             train_idx = path_parts.index("train")
-            relative_structure = os.sep.join(path_parts[train_idx+1:])
 
-            # Create the target directory maintaining the class structure
+            # Extract class name from path
+            class_name = path_parts[train_idx + 1]
+
+            # Update class counter
+            class_counts[class_name] = class_counts.get(class_name, 0) + 1
+            total_saved += 1
+
+            relative_structure = os.sep.join(path_parts[train_idx+1:])
             target_dir = os.path.join(base_latent_dir, "train", os.path.dirname(relative_structure))
             os.makedirs(target_dir, exist_ok=True)
 
-            # Create metadata for this specific image
+            # Create metadata
             metadata = {
                 'batch_idx': idx,
                 'timestamp': datetime.now().isoformat(),
                 'original_path': path,
-                'relative_path': relative_structure
+                'relative_path': relative_structure,
+                'class': class_name
             }
 
-            # Add any batch-level metadata
             if batch_metadata:
                 metadata.update(batch_metadata)
 
-            # Get original filename without extension
+            # Save CSV file
             filename = os.path.splitext(os.path.basename(path))[0]
-
-            # Create and save CSV file
             csv_path = os.path.join(target_dir, f"{filename}.csv")
 
-            # Convert latent values to numpy and flatten
             latent_values = latent.detach().cpu().numpy().flatten()
-
-            # Create DataFrame with metadata and latent values
             data = {
                 'type': ['metadata'] * len(metadata) + ['latent_values'],
                 'key': list(metadata.keys()) + ['values'],
@@ -235,12 +224,18 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, batch_metadata=
             df = pd.DataFrame(data)
             df.to_csv(csv_path, index=False)
 
-            #if idx == 0:  # Print first save location as confirmation
-             #   print(f"Saving batch latents to directory: {target_dir}")
-
         except Exception as e:
             print(f"Error saving latent for {path}: {str(e)}")
             continue
+
+    # Print distribution summary after each batch
+    print("\nLatent space saving summary:")
+    print(f"Total files saved: {total_saved}")
+    print("\nClass distribution:")
+    for class_name, count in class_counts.items():
+        percentage = (count / total_saved) * 100
+        print(f"  • {class_name}: {count} files ({percentage:.1f}%)")
+
 
 
 def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
