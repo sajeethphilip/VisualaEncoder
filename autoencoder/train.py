@@ -12,7 +12,21 @@ from datetime import datetime
 from tqdm import tqdm
 
 def train_model(config):
-    display_header()
+    """Train the autoencoder model with separate latent space generation."""
+
+    # Initial setup
+    device = get_device()
+    dataset_config = config["dataset"]
+    data_dir = os.path.join("data", dataset_config["name"], "train")
+
+    # Define class_folders first
+    class_folders = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
+    print(f"\nFound {len(class_folders)} classes:")
+    for class_name in class_folders:
+        class_path = os.path.join(data_dir, class_name)
+        num_images = len([f for f in os.listdir(class_path)
+                         if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
+        print(f"  • {class_name}: {num_images} images")    display_header()
 
     # Initialize tracking
     class_correct = {cls: 0 for cls in class_folders}
