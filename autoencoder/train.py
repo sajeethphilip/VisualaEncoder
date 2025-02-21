@@ -109,6 +109,7 @@ def train_model(config):
 
             model.eval()
             with torch.no_grad():
+                device = get_device()
                 for class_name in train_dataset.classes:
                     # Create class-specific loader
                     class_indices = [i for i, (_, label) in enumerate(train_dataset)
