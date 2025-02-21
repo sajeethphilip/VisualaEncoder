@@ -67,29 +67,34 @@ def verify_latent_saving(dataset_name, class_folders):
 
 def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
     """
-    Update confusion matrix based on reconstruction quality.
-
+    Update confusion matrix based on reconstruction quality with proper device handling.
+    
     Args:
-        original: Original images batch tensor
-        reconstructed: Reconstructed images batch tensor
-        true_class: True class labels
-        confusion_matrix: The confusion matrix tensor
+        original: Original images batch tensor (on device)
+        reconstructed: Reconstructed images batch tensor (on device)
+        true_class: True class labels (on device)
+        confusion_matrix: The confusion matrix tensor (on device)
         threshold: MSE threshold for considering reconstruction successful
     """
     with torch.no_grad():
+        # Ensure all tensors are on the same device
+        device = original.device
+        threshold = torch.tensor(threshold, device=device)
+        
         # Compute MSE for each image in batch
-        device=get_device()
-        mse = torch.mean((original - reconstructed)**2, dim=(1,2,3)).to(device)
-
+        mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
+        
         # Determine predicted class based on reconstruction quality
-        pred_class = torch.where(mse < threshold, true_class, -1)
-
+        pred_class = torch.where(mse < threshold, true_class, 
+                               torch.tensor(-1, device=device))
+        
         # Update confusion matrix
         for t, p in zip(true_class, pred_class):
             if p != -1:  # Only count if reconstruction was good enough
                 confusion_matrix[t][p] += 1
             else:
                 confusion_matrix[t][t] -= 1  # Count as misclassification
+
 
 def find_first_image(directory):
     """Find the first image file in a directory or its subdirectories."""
