@@ -20,6 +20,7 @@ def train_model(config):
     terminal_height = terminal_size.lines
 
    # Header and branding
+    print("\033[2J\033[H")  # Clear screen
     print(f"\n{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}")
     print(f"{Style.BRIGHT}{Fore.YELLOW}{'Visual Autoencoder Tool':^80}{Style.RESET_ALL}")
     print(f"{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}\n")
