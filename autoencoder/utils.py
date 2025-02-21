@@ -68,13 +68,7 @@ def verify_latent_saving(dataset_name, class_folders):
 def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
     """
     Update and display confusion matrix with dynamic scaling and color coding.
-    
-    Args:
-        original: Original images tensor (on device)
-        reconstructed: Reconstructed images tensor (on device)
-        true_class: True class labels
-        confusion_matrix: The confusion matrix tensor
-        threshold: MSE threshold for considering reconstruction successful
+    Handles zero-division cases and early training stages.
     """
     with torch.no_grad():
         # Get device and ensure all tensors are on same device
@@ -97,76 +91,55 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
             else:
                 confusion_matrix[t][t] -= 1
 
-        # Calculate metrics
+        # Calculate metrics (handling zero division)
         total = confusion_matrix.sum(dim=1)
         correct = confusion_matrix.diag()
+        
+        # Avoid division by zero for accuracy calculation
         class_acc = torch.where(total > 0, 
                               correct.float() / total.float(),
                               torch.zeros_like(total, dtype=torch.float32))
-        overall_acc = correct.sum().float() / total.sum().float() if total.sum() > 0 else 0
+        
+        overall_acc = (correct.sum().float() / total.sum().float() 
+                      if total.sum() > 0 else torch.tensor(0.0))
 
         # Get terminal dimensions and matrix size
         term_width = os.get_terminal_size().columns
-        term_height = os.get_terminal_size().lines
         num_classes = confusion_matrix.shape[0]
         
-        # Dynamic scaling based on number of classes
-        if num_classes <= 10:
-            cell_width = 6  # Standard size for small matrices
-        elif num_classes <= 20:
-            cell_width = 4  # Reduced size for medium matrices
-        else:
-            cell_width = 2  # Minimal size for large matrices (dot display)
-        
-        # Clear previous output and position cursor
-        print("\033[K", end='')  # Clear line
-        
-        # Display overall accuracy
-        print(f"\nOverall Accuracy: {overall_acc:.1%}")
-        
-        # Display class accuracies compactly
-        if num_classes <= 10:
-            acc_str = " ".join([f"{i}:{class_acc[i]:.1%}" for i in range(num_classes)])
-            print(f"Class Acc: {acc_str}\n")
-        
-        # Matrix display with color coding
+        # Display with proper handling of zero values
+        print("\nConfusion Matrix:")
         max_val = confusion_matrix.max().item()
-        
-        # Header (only for smaller matrices)
-        if cell_width > 2:
-            print("   " + "".join(f"{j:^{cell_width}}" for j in range(num_classes)))
-            print("-" * (3 + cell_width * num_classes))
-        
-        # Matrix content
+        if max_val == 0:
+            max_val = 1  # Avoid division by zero for color scaling
+            
+        # Matrix display with color coding
         for i in range(num_classes):
-            if cell_width > 2:
-                row = f"{i:2} "
-            else:
-                row = ""
-                
+            row = ""
             for j in range(num_classes):
                 val = confusion_matrix[i, j].item()
                 if val == 0:
                     color = Style.RESET_ALL
-                    char = " " if cell_width > 2 else "·"
+                    char = "·"  # Use middle dot for zero values
                 else:
-                    # Color intensity based on value
-                    intensity = min(1.0, val / max_val)
+                    # Safe intensity calculation
+                    intensity = val / max_val if max_val > 0 else 0
                     if i == j:  # Diagonal - green
                         color = f"\033[38;2;{int(intensity*150)};{int(intensity*255)};{int(intensity*150)}m"
                     else:  # Off-diagonal - red
                         color = f"\033[38;2;{int(intensity*255)};{int(intensity*150)};{int(intensity*150)}m"
-                    
-                    if cell_width > 2:
-                        char = f"{val:^{cell_width}.0f}"
-                    else:
-                        char = "●"
-                
+                    char = "█"
                 row += f"{color}{char}{Style.RESET_ALL}"
-            
             print(row)
+            
+        # Display accuracies only if we have some data
+        if total.sum() > 0:
+            print(f"\nOverall Accuracy: {overall_acc:.1%}")
+            acc_str = " ".join([f"{i}:{acc:.1%}" for i, acc in enumerate(class_acc)])
+            print(f"Class Acc: {acc_str}")
         
         print(Style.RESET_ALL)  # Reset colors
+
 
 
 def display_confusion_matrix(
