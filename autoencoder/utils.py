@@ -52,23 +52,23 @@ def verify_latent_saving(dataset_name, class_folders):
     """Verify that latent space CSV files are properly saved."""
     base_dir = f"data/{dataset_name}/latent_space/train"
     saved_files = {cls: [] for cls in class_folders}
-    
+
     for class_name in class_folders:
         class_path = os.path.join(base_dir, class_name)
         if os.path.exists(class_path):
             files = [f for f in os.listdir(class_path) if f.endswith('.csv')]
             saved_files[class_name] = files
-    
+
     print("\nLatent Space Saving Summary:")
     for class_name, files in saved_files.items():
         print(f"Class {class_name}: {len(files)} CSV files saved")
-    
+
     return saved_files
-    
+
 def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
     """
     Update confusion matrix based on reconstruction quality.
-    
+
     Args:
         original: Original images batch tensor
         reconstructed: Reconstructed images batch tensor
@@ -79,10 +79,10 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
     with torch.no_grad():
         # Compute MSE for each image in batch
         mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
-        
+
         # Determine predicted class based on reconstruction quality
         pred_class = torch.where(mse < threshold, true_class, -1)
-        
+
         # Update confusion matrix
         for t, p in zip(true_class, pred_class):
             if p != -1:  # Only count if reconstruction was good enough
@@ -219,14 +219,14 @@ def display_header():
     print("="*80)
 
 def display_confusion_matrix(
-    confusion_matrix: Union[np.ndarray, torch.Tensor], 
-    class_names: List[str], 
-    terminal_height: int, 
+    confusion_matrix: Union[np.ndarray, torch.Tensor],
+    class_names: List[str],
+    terminal_height: int,
     header_height: int
 ) -> None:
     """
     Display the confusion matrix with proper handling of both numpy arrays and torch tensors.
-    
+
     Args:
         confusion_matrix: Either a numpy array or torch tensor containing the confusion matrix
         class_names: List of class names
@@ -236,42 +236,42 @@ def display_confusion_matrix(
     # Convert to numpy if it's a torch tensor
     if isinstance(confusion_matrix, torch.Tensor):
         confusion_matrix = confusion_matrix.cpu().numpy()
-    
+
     # Calculate metrics
     correct = np.diagonal(confusion_matrix)
     total = confusion_matrix.sum(axis=1)
     accuracy = correct / total
-    
+
     # Create the display string
     display_str = "\033[H"  # Move to top of screen
     display_str += "\n" * header_height  # Move past header
-    
+
     # Add class-wise accuracy
     display_str += "Class-wise Accuracy:\n"
     for i, (class_name, acc) in enumerate(zip(class_names, accuracy)):
         display_str += f"{class_name}: {acc:.2%}\n"
-    
+
     # Add overall accuracy
     total_correct = correct.sum()
     total_samples = total.sum()
     overall_accuracy = total_correct / total_samples
     display_str += f"\nOverall Accuracy: {overall_accuracy:.2%}\n"
-    
+
     # Add confusion matrix
     display_str += "\nConfusion Matrix:\n"
     display_str += "True\\Pred |"
     for name in class_names:
         display_str += f" {name:>8} |"
     display_str += "\n" + "-" * (10 + 11 * len(class_names)) + "\n"
-    
+
     for i, true_class in enumerate(class_names):
         display_str += f"{true_class:9} |"
         for j in range(len(class_names)):
             display_str += f" {confusion_matrix[i, j]:8.0f} |"
         display_str += "\n"
-    
+
     print(display_str)
-    
+
 def update_progress(
     epoch: int,
     batch: int,
@@ -287,11 +287,11 @@ def update_progress(
     display_str += f"Epoch: {epoch} | Batch: {batch}/{total_batches} | "
     display_str += f"Progress: {progress:.1f}% | Loss: {loss:.4f}"
     print(display_str)
-    
+
 def update_progress_bar(epoch, batch, total_batches, loss, terminal_height):
     """
     Update progress bar with static positioning.
-    
+
     Args:
         epoch: Current epoch number
         batch: Current batch number
@@ -303,21 +303,21 @@ def update_progress_bar(epoch, batch, total_batches, loss, terminal_height):
     progress = batch / total_batches
     filled = int(bar_width * progress)
     bar = "█" * filled + "-" * (bar_width - filled)
-    
+
     # Position cursor and clear line
     print(f"\033[{terminal_height-2};0H\033[K", end="")
     print(f"Epoch {epoch}: [{bar}] {batch}/{total_batches} Loss: {loss:.4f}")
-    
+
 def create_confusion_matrix(num_classes):
     """Initialize a proper confusion matrix."""
     return torch.zeros((num_classes, num_classes), dtype=torch.long)
-    
+
 
 
 def save_batch_latents(batch_latents, image_paths, dataset_name, metadata=None):
     """
     Save latent representations with original filenames and metadata.
-    
+
     Args:
         batch_latents: Tensor of latent representations
         image_paths: List of paths to original images
@@ -340,10 +340,10 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, metadata=None):
         data = {
             'type': ['metadata'] * (len(metadata) if metadata else 0) + ['latent_values'],
             'key': (list(metadata.keys()) if metadata else []) + ['values'],
-            'value': (list(map(str, metadata.values())) if metadata else []) + 
+            'value': (list(map(str, metadata.values())) if metadata else []) +
                     [','.join(map(str, latent.detach().cpu().numpy().flatten()))]
         }
-        
+
         # Save as DataFrame
         df = pd.DataFrame(data)
         df.to_csv(csv_path, index=False)
