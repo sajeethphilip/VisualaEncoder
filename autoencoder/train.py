@@ -19,14 +19,22 @@ def train_model(config):
     terminal_size = os.get_terminal_size()
     terminal_height = terminal_size.lines
 
-    # Display header (stays at top)
-    print("\033[2J\033[H")  # Clear screen
-    print("="*80)
-    print("Visual Autoencoder Tool".center(80))
-    print("="*80)
-    print("Author: Ninan Sajeeth Philip".center(80))
-    print("AIRIS, Thelliyoor".center(80))
-    print("="*80)
+   # Header and branding
+    print(f"\n{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.YELLOW}{'Visual Autoencoder Tool':^80}{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}\n")
+
+    # Author and License information
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'Author: ':>30}{Fore.YELLOW}Ninan Sajeeth Philip{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'Organisation: ':>30}{Fore.LIGHTGREEN_EX}Artificial Intelligence Research and Intelligent Systems{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.LIGHTGREEN_EX}{'':>30}Thelliyoor -689544 India{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'License: ':>30}{Fore.BLUE}Creative Commons License{Style.RESET_ALL}\n")
+    print(f"\n{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}")
+    # Data source selection menu
+    print(f"{Style.BRIGHT}{Fore.CYAN}{'Select data source:':^80}{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'1. ':>35}{Fore.YELLOW}Torchvision dataset (e.g., CIFAR10, MNIST){Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'2. ':>35}{Fore.YELLOW}URL to download dataset{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'3. ':>35}{Fore.YELLOW}Local file/folder{Style.RESET_ALL}\n")
 
     # Initial setup
     device = get_device()
