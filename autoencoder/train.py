@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from autoencoder.model import Autoencoder, ModifiedAutoencoder
 from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv, save_checkpoint, update_progress, display_confusion_matrix
-from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv, save_batch_latents, display_header
+from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv, save_batch_latents, display_header,update_confusion_matrix
 from datetime import datetime
 from tqdm import tqdm
 from colorama import init, Fore, Back, Style
