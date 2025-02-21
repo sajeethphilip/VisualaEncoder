@@ -57,7 +57,7 @@ def train_model(config):
 
     # Initialize confusion matrix
     num_classes = len(train_dataset.classes)
-    confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.long)
+    confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.float32)
 
     def draw_progress_box(epoch, batch, total_batches, loss, avg_loss):
         """Draw a green box around progress information."""

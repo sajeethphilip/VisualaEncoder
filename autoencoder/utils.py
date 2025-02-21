@@ -81,76 +81,35 @@ import io
 from PIL import Image
 from colorama import init, Fore, Back, Style
 
-def update_confusion_matrix(original, reconstructed, true_labels, confusion_matrix, threshold=0.1):
+def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
     """
-    Update confusion matrix and display using matplotlib with fixed frame size.
+    Update confusion matrix based on reconstruction quality.
+    Args:
+        original: Original images tensor
+        reconstructed: Reconstructed images tensor
+        true_class: True class labels tensor
+        confusion_matrix: The confusion matrix to update
+        threshold: MSE threshold for considering reconstruction successful
     """
     with torch.no_grad():
-        # Get device and ensure all tensors are on same device
+        # Move tensors to same device
         device = original.device
-        true_class = true_labels.to(device).long()
+        true_class = true_class.to(device)
         confusion_matrix = confusion_matrix.to(device)
-        threshold = torch.tensor(threshold, device=device)
 
-        # Compute MSE and update confusion matrix
+        # Compute MSE for reconstruction quality
         mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
-        pred_class = torch.where(mse < threshold, true_class,
-                               torch.tensor(-1, device=device).long())
 
-        # Update confusion matrix based on reconstruction quality
-        for i, label in enumerate(true_labels):
-            if mse[i] < threshold:
+        # Update confusion matrix
+        for i, (error, label) in enumerate(zip(mse, true_class)):
+            label = label.item()
+            if error < threshold:
+                # Good reconstruction - increment diagonal
                 confusion_matrix[label][label] += 1
             else:
-                # Distribute errors based on reconstruction quality
-                error_dist = F.softmax(-mse[i].view(1), dim=0)
-                confusion_matrix[label] += error_dist
+                # Poor reconstruction - decrement diagonal
+                confusion_matrix[label][label] = max(0, confusion_matrix[label][label] - 1)
 
-        # Calculate metrics
-        total = confusion_matrix.sum(dim=1).float()
-        correct = confusion_matrix.diag().float()
-        class_acc = torch.where(total > 0, correct / total,
-                              torch.zeros_like(total, dtype=torch.float32))
-        overall_acc = correct.sum() / total.sum() if total.sum() > 0 else torch.tensor(0.0)
-
-        # Create matplotlib figure with fixed size
-        plt.close('all')
-        fig = plt.figure(figsize=(6, 4))
-
-        # Convert confusion matrix to numpy for plotting
-        cm = confusion_matrix.cpu().numpy()
-
-        # Create custom colormap (red to green)
-        colors = ['#ff0000', '#ffff00', '#00ff00']  # Red -> Yellow -> Green
-        n_bins = 100
-        cmap = LinearSegmentedColormap.from_list("custom", colors, N=n_bins)
-
-        # Plot heatmap
-        plt.imshow(cm, cmap=cmap)
-        plt.colorbar(fraction=0.046, pad=0.04)
-
-        # Add labels
-        plt.xlabel('Predicted')
-        plt.ylabel('True')
-        plt.title(f'Confusion Matrix\nAccuracy: {overall_acc:.1%}')
-
-        # Add ticks
-        num_classes = cm.shape[0]
-        plt.xticks(range(num_classes))
-        plt.yticks(range(num_classes))
-
-        # Add text annotations
-        for i in range(num_classes):
-            for j in range(num_classes):
-                plt.text(j, i, f'{cm[i, j]:.0f}',
-                        ha='center', va='center',
-                        color='white' if cm[i, j] > cm.max()/2 else 'black')
-
-        # Draw plot
-        plt.draw()
-        plt.pause(0.001)  # Small pause to allow plot to update
-
-        return confusion_matrix
 
 
 
