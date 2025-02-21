@@ -67,99 +67,98 @@ def verify_latent_saving(dataset_name, class_folders):
 
 def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
     """
-    Update and display confusion matrix with proper scaling and numeric label handling.
+    Update confusion matrix and display using matplotlib with fixed frame size.
     """
     with torch.no_grad():
         # Get device and ensure all tensors are on same device
         device = original.device
-        true_class = true_class.to(device)
+        true_class = true_class.to(device).long()
         confusion_matrix = confusion_matrix.to(device)
         threshold = torch.tensor(threshold, device=device)
         
-        # Convert labels to numeric if they aren't already
-        if not true_class.dtype.is_floating_point and not true_class.dtype.is_complex:
-            true_class = true_class.long()
-        
-        # Compute MSE for each image in batch
+        # Compute MSE and update confusion matrix
         mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
-        
-        # Update confusion matrix
-        pred_class = torch.where(mse < threshold, 
-                               true_class, 
+        pred_class = torch.where(mse < threshold, true_class, 
                                torch.tensor(-1, device=device).long())
         
         for t, p in zip(true_class, pred_class):
             if p != -1:
-                confusion_matrix[t.long()][p.long()] += 1
+                confusion_matrix[t][p] += 1
             else:
-                confusion_matrix[t.long()][t.long()] -= 1
+                confusion_matrix[t][t] -= 1
 
-        # Calculate metrics (handling zero division)
+        # Calculate metrics
         total = confusion_matrix.sum(dim=1).float()
         correct = confusion_matrix.diag().float()
-        
-        # Calculate accuracies (avoiding division by zero)
-        class_acc = torch.where(total > 0, 
-                              correct / total,
+        class_acc = torch.where(total > 0, correct / total,
                               torch.zeros_like(total, dtype=torch.float32))
-        
-        overall_acc = (correct.sum() / total.sum() 
-                      if total.sum() > 0 else torch.tensor(0.0))
+        overall_acc = correct.sum() / total.sum() if total.sum() > 0 else torch.tensor(0.0)
 
-        # Get terminal dimensions
-        term_width = os.get_terminal_size().columns
-        num_classes = confusion_matrix.shape[0]
+        # Create matplotlib figure with fixed size
+        plt.close('all')  # Clear any existing plots
+        fig, ax = plt.subplots(figsize=(6, 5))
         
-        # Calculate box dimensions based on content
-        max_line_length = max(
-            len("Current Loss: X.XXXXXX"),
-            len("Average Loss: X.XXXXXX"),
-            len("Best Loss: X.XXXXXX"),
-            len(f"Progress: [{'=' * 50}] 100%"),
-            len(f"Epoch: XXX/XXX Batch: XXXX/XXXX")
-        )
+        # Convert confusion matrix to numpy for plotting
+        cm = confusion_matrix.cpu().numpy()
+        num_classes = cm.shape[0]
         
-        # Add padding for box borders
-        box_width = max_line_length + 4
+        # Create heatmap
+        im = ax.imshow(cm, cmap='RdYlGn')  # Red for errors, Yellow for medium, Green for correct
         
-        # Draw box with progress information
-        print("\033[K")  # Clear line
-        print(f"╔{'═' * box_width}╗")
+        # Add colorbar
+        plt.colorbar(im)
         
-        # Display matrix content with scaling
-        scale = min(1.0, term_width / (num_classes * 4))  # Scale factor for display
-        display_width = max(1, int(num_classes * scale))
+        # Set labels
+        ax.set_xlabel('Predicted')
+        ax.set_ylabel('True')
+        ax.set_title(f'Confusion Matrix\nAccuracy: {overall_acc:.1%}')
         
-        # Only show accuracies if we have valid data
-        if total.sum() > 0:
-            print(f"║ Overall Accuracy: {overall_acc:.1%}{' ' * (box_width - 20)}║")
-            
-            # Display class accuracies in compact form
-            acc_line = "║ Class Acc: "
-            for i in range(min(num_classes, display_width)):
-                acc_line += f"{i}:{class_acc[i]:.0%} "
-            acc_line = acc_line[:box_width-1] + "║"
-            print(acc_line)
+        # Add class labels
+        ax.set_xticks(np.arange(num_classes))
+        ax.set_yticks(np.arange(num_classes))
+        ax.set_xticklabels(range(num_classes))
+        ax.set_yticklabels(range(num_classes))
         
-        # Matrix display with color coding
-        print(f"║{' ' * box_width}║")
-        for i in range(min(num_classes, display_width)):
-            line = "║ "
-            for j in range(min(num_classes, display_width)):
-                val = confusion_matrix[i][j].item()
-                if val == 0:
-                    char = "·"
-                else:
-                    intensity = val / confusion_matrix.max().item()
-                    if i == j:
-                        char = "█" if intensity > 0.5 else "▓"
-                    else:
-                        char = "▓" if intensity > 0.5 else "░"
-                line += char
-            line += " " * (box_width - display_width - 3) + "║"
-            print(line)
+        # Rotate tick labels if needed
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+                rotation_mode="anchor")
         
-        print(f"╚{'═' * box_width}╝")
+        # Add text annotations in cells
+        for i in range(num_classes):
+            for j in range(num_classes):
+                text = ax.text(j, i, f'{cm[i, j]:.0f}',
+                             ha="center", va="center", 
+                             color="black" if cm[i, j] < cm.max()/2 else "white")
+        
+        # Add class accuracies on the right
+        acc_text = "Class Accuracies:\n"
+        for i in range(num_classes):
+            acc_text += f"Class {i}: {class_acc[i]:.1%}\n"
+        plt.figtext(1.1, 0.5, acc_text, ha='left', va='center')
+        
+        # Adjust layout to prevent text cutoff
+        plt.tight_layout()
+        
+        # Save plot to a temporary buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+        buf.seek(0)
+        
+        # Clear plot to free memory
+        plt.close()
+        
+        # Display image using terminal image display (requires iTerm2 or similar)
+        # You might need to adjust this based on your terminal capabilities
+        try:
+            from PIL import Image
+            img = Image.open(buf)
+            # Optional: resize image if needed
+            # img = img.resize((width, height))
+            display(img)
+        except ImportError:
+            print("PIL not available for image display")
+        finally:
+            buf.close()
 
 
 
