@@ -5,9 +5,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
-from autoencoder.model import Autoencoder,ModifiedAutoencoder
-from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv,save_checkpoint,update_progress,display_confusion_matrix
-from autoencoder.utils import  load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv,save_batch_latents,display_header
+from autoencoder.model import Autoencoder, ModifiedAutoencoder
+from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv, save_checkpoint, update_progress, display_confusion_matrix
+from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv, save_batch_latents, display_header
 from datetime import datetime
 from tqdm import tqdm
 
@@ -43,7 +43,7 @@ def train_model(config):
     )
 
     # Model setup
-    model = ModifiedAutoencoder(config, device=device).to(device)
+    model = ModifiedAutoencoder(config).to(device)  # Move model to device
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=config["model"]["learning_rate"],
@@ -84,7 +84,7 @@ def train_model(config):
         print(f"Training Epoch {epoch + 1}/{epochs}")
 
         for images, _ in tqdm(train_loader, leave=False, position=terminal_height-2):
-            images = images.to(device)
+            images = images.to(device)  # Move images to device
             reconstructed, _ = model(images)
 
             loss = criterion_recon(reconstructed, images)
@@ -125,7 +125,7 @@ def train_model(config):
                     print(f"Processing class: {class_name} ({len(class_subset)} images)")
 
                     for images, _ in tqdm(class_loader, leave=False, position=terminal_height-2):
-                        images = images.to(device)
+                        images = images.to(device)  # Move images to device
                         _, latent_1d = model(images)
 
                         # Get paths for saving
@@ -146,11 +146,6 @@ def train_model(config):
     print("Training complete!")
     return model
 
-
-
-
-
-
 def save_final_representations(model, loader, device, dataset_name):
     """Save the final latent space and embeddings."""
     latent_space = []
@@ -159,7 +154,7 @@ def save_final_representations(model, loader, device, dataset_name):
     with torch.no_grad():
         for batch in loader:
             images, _ = batch
-            images = images.to(device)
+            images = images.to(device)  # Move images to device
             _, latent, embeddings = model(images)
             latent_space.append(latent.cpu())
             embeddings_space.append(embeddings.cpu())
@@ -171,7 +166,6 @@ def save_final_representations(model, loader, device, dataset_name):
     # Save representations
     save_latent_space(latent_space, dataset_name, "latent.pkl")
     save_embeddings_as_csv(embeddings_space, dataset_name, "embeddings.csv")
-
 
 if __name__ == "__main__":
     # Example usage
