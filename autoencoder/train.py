@@ -95,7 +95,7 @@ def train_model(config):
     best_batch_loss = float("inf")
     best_epoch_loss = float("inf")
     # Training loop
-     for epoch in range(epochs):
+    for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
         num_batches = len(train_loader)
