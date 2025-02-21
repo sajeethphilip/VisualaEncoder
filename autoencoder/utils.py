@@ -91,17 +91,20 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
         true_class = true_class.to(device).long()
         confusion_matrix = confusion_matrix.to(device)
         threshold = torch.tensor(threshold, device=device)
-        
+
         # Compute MSE and update confusion matrix
         mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
-        pred_class = torch.where(mse < threshold, true_class, 
+        pred_class = torch.where(mse < threshold, true_class,
                                torch.tensor(-1, device=device).long())
-        
-        for t, p in zip(true_class, pred_class):
-            if p != -1:
-                confusion_matrix[t][p] += 1
+
+        # Update confusion matrix based on reconstruction quality
+        for i, label in enumerate(labels):
+            if mse[i] < threshold:
+                confusion_matrix[label][label] += 1
             else:
-                confusion_matrix[t][t] -= 1
+                # Distribute errors based on reconstruction quality
+                error_dist = F.softmax(-mse[i].view(1), dim=0)
+                confusion_matrix[label] += error_dist
 
         # Calculate metrics
         total = confusion_matrix.sum(dim=1).float()
@@ -113,36 +116,36 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
         # Create matplotlib figure with fixed size
         plt.close('all')
         fig = plt.figure(figsize=(6, 4))
-        
+
         # Convert confusion matrix to numpy for plotting
         cm = confusion_matrix.cpu().numpy()
-        
+
         # Create custom colormap (red to green)
         colors = ['#ff0000', '#ffff00', '#00ff00']  # Red -> Yellow -> Green
         n_bins = 100
         cmap = LinearSegmentedColormap.from_list("custom", colors, N=n_bins)
-        
+
         # Plot heatmap
         plt.imshow(cm, cmap=cmap)
         plt.colorbar(fraction=0.046, pad=0.04)
-        
+
         # Add labels
         plt.xlabel('Predicted')
         plt.ylabel('True')
         plt.title(f'Confusion Matrix\nAccuracy: {overall_acc:.1%}')
-        
+
         # Add ticks
         num_classes = cm.shape[0]
         plt.xticks(range(num_classes))
         plt.yticks(range(num_classes))
-        
+
         # Add text annotations
         for i in range(num_classes):
             for j in range(num_classes):
                 plt.text(j, i, f'{cm[i, j]:.0f}',
                         ha='center', va='center',
                         color='white' if cm[i, j] > cm.max()/2 else 'black')
-        
+
         # Draw plot
         plt.draw()
         plt.pause(0.001)  # Small pause to allow plot to update
@@ -162,7 +165,7 @@ def display_confusion_matrix(
 ) -> None:
     """
     Display a scaled confusion matrix with color-coded cells.
-    
+
     Args:
         original: Original images tensor (B, C, H, W)
         reconstructed: Reconstructed images tensor (B, C, H, W)
@@ -175,14 +178,14 @@ def display_confusion_matrix(
         device = original.device
         true_labels = true_labels.to(device)
         confusion_matrix = confusion_matrix.to(device)
-        
+
         # Compute MSE for batch
         mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
-        
+
         # Update confusion matrix based on reconstruction quality
-        pred_labels = torch.where(mse < threshold, true_labels, 
+        pred_labels = torch.where(mse < threshold, true_labels,
                                 torch.tensor(-1, device=device))
-        
+
         for t, p in zip(true_labels, pred_labels):
             if p != -1:
                 confusion_matrix[t][p] += 1
@@ -192,29 +195,29 @@ def display_confusion_matrix(
         # Calculate metrics
         total = confusion_matrix.sum(axis=1)
         correct = confusion_matrix.diag()
-        accuracy = torch.where(total > 0, correct.float() / total.float(), 
+        accuracy = torch.where(total > 0, correct.float() / total.float(),
                              torch.zeros_like(total, dtype=torch.float32))
         overall_acc = correct.sum().float() / total.sum().float() if total.sum() > 0 else 0
 
         # Get terminal size for scaling
         term_width = os.get_terminal_size().columns
         num_classes = confusion_matrix.shape[0]
-        
+
         # Scale cell size based on number of classes
         cell_width = max(3, min(8, term_width // (num_classes + 5)))
-        
+
         # Create compact display string
         display_str = f"\nOverall Accuracy: {overall_acc:.1%}\n"
-        
+
         # Add matrix with color-coded cells
         max_val = confusion_matrix.max()
-        
+
         # Header
         display_str += "   "
         for j in range(num_classes):
             display_str += f"{j:^{cell_width}}"
         display_str += "\n" + "-" * (3 + cell_width * num_classes) + "\n"
-        
+
         # Matrix content with color coding
         for i in range(num_classes):
             display_str += f"{i:2} "
@@ -229,18 +232,18 @@ def display_confusion_matrix(
                         color = f"\033[38;2;{int(intensity*150)};{int(intensity*255)};{int(intensity*150)}m"
                     else:  # Off-diagonal - use red
                         color = f"\033[38;2;{int(intensity*255)};{int(intensity*150)};{int(intensity*150)}m"
-                
+
                 # Use dots for very narrow cells
                 if cell_width <= 3:
                     display_str += f"{color}●{Style.RESET_ALL}"
                 else:
                     display_str += f"{color}{val:^{cell_width}.0f}{Style.RESET_ALL}"
             display_str += "\n"
-        
+
         # Class-wise accuracies in compact form
         display_str += "\nClass Acc: "
         acc_str = " ".join([f"{i}:{accuracy[i]:.0%}" for i in range(num_classes)])
-        
+
         # Print with proper positioning
         print(f"\033[K{display_str}")
 
@@ -1440,10 +1443,3 @@ def load_dataset_config(dataset_name):
         config = json.load(f)
     return config["dataset"]
 
-
-# Example usage
-if __name__ == "__main__":
-    image_path = "path/to/input/image.png"  # Replace with the path to your input image
-    checkpoint_path = "Model/checkpoint/Best_CIFAR10.pth"  # Replace with the path to your model checkpoint
-    dataset_name = "CIFAR10"  # Replace with the dataset name
-    reconstruct_image(image_path, checkpoint_path, dataset_name)

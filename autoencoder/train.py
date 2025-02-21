@@ -75,32 +75,25 @@ def train_model(config):
         # Box dimensions
         width = 60
         height = 8
-
-        # Draw top border
-        print(f"{Fore.GREEN}{top_left}{horizontal * width}{top_right}{Style.RESET_ALL}")
-
-        # Progress information
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (width-20)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-
-        # Progress bar
-        bar_width = width - 20
         progress = batch / total_batches
+
+        # Format progress bar with exact spacing
+        bar_width = width - 20  # Account for brackets and percentage
         filled = int(bar_width * progress)
         bar = "█" * filled + "-" * (bar_width - filled)
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} [{bar}] {progress:.1%} {' ' * 5}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
 
-        # Training metrics
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Batch: {batch}/{total_batches} {' ' * (width-25)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Current Loss: {loss:.6f} {' ' * (width-30)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Average Loss: {avg_loss:.6f} {' ' * (width-30)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Best Loss: {best_loss:.6f} {' ' * (width-30)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}╔{'═' * width}╗{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}║{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs:<{width-10}}{Fore.GREEN}║{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}║{Style.RESET_ALL} [{bar}] {progress:.1%}{' ' * (width-len(bar)-8)}{Fore.GREEN}║{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}║{Style.RESET_ALL} Batch: {batch}/{total_batches:<{width-15}}{Fore.GREEN}║{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}║{Style.RESET_ALL} Current Loss: {loss:.6f:<{width-20}}{Fore.GREEN}║{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}║{Style.RESET_ALL} Average Loss: {avg_loss:.6f:<{width-20}}{Fore.GREEN}║{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}║{Style.RESET_ALL} Best Loss: {best_loss:.6f:<{width-20}}{Fore.GREEN}║{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}╚{'═' * width}╝{Style.RESET_ALL}")
 
-        # Draw bottom border
-        print(f"{Fore.GREEN}{bottom_left}{horizontal * width}{bottom_right}{Style.RESET_ALL}")
-
-        # Display confusion matrix below progress box
-        print("\nConfusion Matrix:")
-
+    # Initialize best losses
+    best_batch_loss = float("inf")
+    best_epoch_loss = float("inf")
     # Training loop
     for epoch in range(epochs):
         model.train()
@@ -112,6 +105,9 @@ def train_model(config):
             model=model.to(device)
             reconstructed, _ = model(images)
             loss = criterion_recon(reconstructed, images)
+            # Update best batch loss
+            if loss.item() < best_batch_loss:
+                best_batch_loss = loss.item()
 
             optimizer.zero_grad()
             loss.backward()
@@ -124,13 +120,14 @@ def train_model(config):
             update_confusion_matrix(images, reconstructed, labels, confusion_matrix)
 
             # Update progress display with box and confusion matrix
-            draw_progress_box(epoch, batch_idx + 1, num_batches, loss.item(), avg_loss)
+            draw_progress_box(epoch, batch_idx + 1, num_batches,
+                            loss.item(), avg_loss, best_batch_loss,best_epoch_loss)
 
         # End of epoch processing
         avg_epoch_loss = epoch_loss / num_batches
 
-        if avg_epoch_loss < best_loss:
-            best_loss = avg_epoch_loss
+        if avg_epoch_loss < best_epoch_loss:
+            best_lepoch_oss = avg_epoch_loss
             patience_counter = 0
             save_checkpoint(model, epoch + 1, avg_epoch_loss, config,
                           os.path.join(config["training"]["checkpoint_dir"], "best_model.pth"))
