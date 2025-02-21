@@ -67,20 +67,18 @@ def verify_latent_saving(dataset_name, class_folders):
 
 def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
     """
-    Update confusion matrix based on reconstruction quality with proper device handling.
+    Update and display confusion matrix with dynamic scaling and color coding.
     
     Args:
-        original: Original images batch tensor (on device)
-        reconstructed: Reconstructed images batch tensor (on device)
+        original: Original images tensor (on device)
+        reconstructed: Reconstructed images tensor (on device)
         true_class: True class labels
         confusion_matrix: The confusion matrix tensor
         threshold: MSE threshold for considering reconstruction successful
     """
     with torch.no_grad():
-        # Get device from input tensor
+        # Get device and ensure all tensors are on same device
         device = original.device
-        
-        # Move all tensors to the same device
         true_class = true_class.to(device)
         confusion_matrix = confusion_matrix.to(device)
         threshold = torch.tensor(threshold, device=device)
@@ -88,17 +86,88 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
         # Compute MSE for each image in batch
         mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
         
-        # Determine predicted class based on reconstruction quality
+        # Update confusion matrix
         pred_class = torch.where(mse < threshold, 
                                true_class, 
                                torch.tensor(-1, device=device))
         
-        # Update confusion matrix
         for t, p in zip(true_class, pred_class):
-            if p != -1:  # Only count if reconstruction was good enough
+            if p != -1:
                 confusion_matrix[t][p] += 1
             else:
-                confusion_matrix[t][t] -= 1  # Count as misclassification
+                confusion_matrix[t][t] -= 1
+
+        # Calculate metrics
+        total = confusion_matrix.sum(dim=1)
+        correct = confusion_matrix.diag()
+        class_acc = torch.where(total > 0, 
+                              correct.float() / total.float(),
+                              torch.zeros_like(total, dtype=torch.float32))
+        overall_acc = correct.sum().float() / total.sum().float() if total.sum() > 0 else 0
+
+        # Get terminal dimensions and matrix size
+        term_width = os.get_terminal_size().columns
+        term_height = os.get_terminal_size().lines
+        num_classes = confusion_matrix.shape[0]
+        
+        # Dynamic scaling based on number of classes
+        if num_classes <= 10:
+            cell_width = 6  # Standard size for small matrices
+        elif num_classes <= 20:
+            cell_width = 4  # Reduced size for medium matrices
+        else:
+            cell_width = 2  # Minimal size for large matrices (dot display)
+        
+        # Clear previous output and position cursor
+        print("\033[K", end='')  # Clear line
+        
+        # Display overall accuracy
+        print(f"\nOverall Accuracy: {overall_acc:.1%}")
+        
+        # Display class accuracies compactly
+        if num_classes <= 10:
+            acc_str = " ".join([f"{i}:{class_acc[i]:.1%}" for i in range(num_classes)])
+            print(f"Class Acc: {acc_str}\n")
+        
+        # Matrix display with color coding
+        max_val = confusion_matrix.max().item()
+        
+        # Header (only for smaller matrices)
+        if cell_width > 2:
+            print("   " + "".join(f"{j:^{cell_width}}" for j in range(num_classes)))
+            print("-" * (3 + cell_width * num_classes))
+        
+        # Matrix content
+        for i in range(num_classes):
+            if cell_width > 2:
+                row = f"{i:2} "
+            else:
+                row = ""
+                
+            for j in range(num_classes):
+                val = confusion_matrix[i, j].item()
+                if val == 0:
+                    color = Style.RESET_ALL
+                    char = " " if cell_width > 2 else "·"
+                else:
+                    # Color intensity based on value
+                    intensity = min(1.0, val / max_val)
+                    if i == j:  # Diagonal - green
+                        color = f"\033[38;2;{int(intensity*150)};{int(intensity*255)};{int(intensity*150)}m"
+                    else:  # Off-diagonal - red
+                        color = f"\033[38;2;{int(intensity*255)};{int(intensity*150)};{int(intensity*150)}m"
+                    
+                    if cell_width > 2:
+                        char = f"{val:^{cell_width}.0f}"
+                    else:
+                        char = "●"
+                
+                row += f"{color}{char}{Style.RESET_ALL}"
+            
+            print(row)
+        
+        print(Style.RESET_ALL)  # Reset colors
+
 
 def display_confusion_matrix(
     original: torch.Tensor,
