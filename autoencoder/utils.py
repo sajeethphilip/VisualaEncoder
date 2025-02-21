@@ -88,7 +88,7 @@ def update_confusion_matrix(original, reconstructed, true_labels, confusion_matr
     with torch.no_grad():
         # Get device and ensure all tensors are on same device
         device = original.device
-        true_class = true_class.to(device).long()
+        true_class = true_labels.to(device).long()
         confusion_matrix = confusion_matrix.to(device)
         threshold = torch.tensor(threshold, device=device)
 
