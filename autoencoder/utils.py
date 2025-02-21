@@ -101,57 +101,96 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
                 confusion_matrix[t][t] -= 1  # Count as misclassification
 
 def display_confusion_matrix(
-    confusion_matrix: Union[np.ndarray, torch.Tensor],
-    class_names: List[str],
-    terminal_height: int,
-    header_height: int
+    original: torch.Tensor,
+    reconstructed: torch.Tensor,
+    true_labels: torch.Tensor,
+    confusion_matrix: torch.Tensor,
+    threshold: float = 0.1
 ) -> None:
     """
-    Display a scaled confusion matrix with proper formatting.
+    Display a scaled confusion matrix with color-coded cells.
+    
+    Args:
+        original: Original images tensor (B, C, H, W)
+        reconstructed: Reconstructed images tensor (B, C, H, W)
+        true_labels: True class labels tensor (B)
+        confusion_matrix: Running confusion matrix tensor (num_classes, num_classes)
+        threshold: MSE threshold for considering reconstruction successful
     """
-    # Convert to numpy if it's a torch tensor
-    if isinstance(confusion_matrix, torch.Tensor):
-        confusion_matrix = confusion_matrix.cpu().numpy()
+    with torch.no_grad():
+        # Ensure all tensors are on the same device
+        device = original.device
+        true_labels = true_labels.to(device)
+        confusion_matrix = confusion_matrix.to(device)
+        
+        # Compute MSE for batch
+        mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
+        
+        # Update confusion matrix based on reconstruction quality
+        pred_labels = torch.where(mse < threshold, true_labels, 
+                                torch.tensor(-1, device=device))
+        
+        for t, p in zip(true_labels, pred_labels):
+            if p != -1:
+                confusion_matrix[t][p] += 1
+            else:
+                confusion_matrix[t][t] -= 1
 
-    # Calculate metrics
-    correct = np.diagonal(confusion_matrix)
-    total = confusion_matrix.sum(axis=1)
-    accuracy = np.where(total > 0, correct / total, 0)
-    overall_accuracy = np.sum(correct) / np.sum(total) if np.sum(total) > 0 else 0
+        # Calculate metrics
+        total = confusion_matrix.sum(axis=1)
+        correct = confusion_matrix.diag()
+        accuracy = torch.where(total > 0, correct.float() / total.float(), 
+                             torch.zeros_like(total, dtype=torch.float32))
+        overall_acc = correct.sum().float() / total.sum().float() if total.sum() > 0 else 0
 
-    # Get terminal width
-    terminal_width = os.get_terminal_size().columns - 2
+        # Get terminal size for scaling
+        term_width = os.get_terminal_size().columns
+        num_classes = confusion_matrix.shape[0]
+        
+        # Scale cell size based on number of classes
+        cell_width = max(3, min(8, term_width // (num_classes + 5)))
+        
+        # Create compact display string
+        display_str = f"\nOverall Accuracy: {overall_acc:.1%}\n"
+        
+        # Add matrix with color-coded cells
+        max_val = confusion_matrix.max()
+        
+        # Header
+        display_str += "   "
+        for j in range(num_classes):
+            display_str += f"{j:^{cell_width}}"
+        display_str += "\n" + "-" * (3 + cell_width * num_classes) + "\n"
+        
+        # Matrix content with color coding
+        for i in range(num_classes):
+            display_str += f"{i:2} "
+            for j in range(num_classes):
+                val = confusion_matrix[i, j].item()
+                if val == 0:
+                    color = Style.RESET_ALL
+                else:
+                    # Color intensity based on value
+                    intensity = min(1.0, val / max_val.item())
+                    if i == j:  # Diagonal - use green
+                        color = f"\033[38;2;{int(intensity*150)};{int(intensity*255)};{int(intensity*150)}m"
+                    else:  # Off-diagonal - use red
+                        color = f"\033[38;2;{int(intensity*255)};{int(intensity*150)};{int(intensity*150)}m"
+                
+                # Use dots for very narrow cells
+                if cell_width <= 3:
+                    display_str += f"{color}●{Style.RESET_ALL}"
+                else:
+                    display_str += f"{color}{val:^{cell_width}.0f}{Style.RESET_ALL}"
+            display_str += "\n"
+        
+        # Class-wise accuracies in compact form
+        display_str += "\nClass Acc: "
+        acc_str = " ".join([f"{i}:{accuracy[i]:.0%}" for i in range(num_classes)])
+        
+        # Print with proper positioning
+        print(f"\033[K{display_str}")
 
-    # Calculate scaled width for each column
-    num_classes = len(class_names)
-    col_width = min(8, max(4, (terminal_width - 10) // (num_classes + 1)))
-    
-    # Create the display string
-    display_str = "\n" * header_height  # Move past header
-
-    # Add class-wise accuracy (compact format)
-    display_str += "Class Accuracies: "
-    acc_str = " ".join([f"{i}:{accuracy[i]:.1%}" for i in range(num_classes)])
-    display_str += acc_str + "\n"
-    
-    # Add overall accuracy
-    display_str += f"Overall Accuracy: {overall_accuracy:.1%}\n\n"
-
-    # Add confusion matrix header
-    display_str += "Confusion Matrix:\n"
-    header = "True\\Pred|" + "|".join(f"{name:^{col_width}}" for name in class_names) + "|\n"
-    display_str += header
-    display_str += "-" * len(header) + "\n"
-
-    # Add matrix rows
-    for i, true_class in enumerate(class_names):
-        row = f"{i:^9}|"
-        row += "|".join(f"{confusion_matrix[i, j]:^{col_width}.0f}" for j in range(num_classes))
-        row += "|\n"
-        display_str += row
-
-    # Clear screen from cursor position and display matrix
-    print(f"\033[{header_height}H\033[J" + display_str)
 
 
 def find_first_image(directory):
