@@ -72,20 +72,25 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
     Args:
         original: Original images batch tensor (on device)
         reconstructed: Reconstructed images batch tensor (on device)
-        true_class: True class labels (on device)
-        confusion_matrix: The confusion matrix tensor (on device)
+        true_class: True class labels
+        confusion_matrix: The confusion matrix tensor
         threshold: MSE threshold for considering reconstruction successful
     """
     with torch.no_grad():
-        # Ensure all tensors are on the same device
+        # Get device from input tensor
         device = original.device
+        
+        # Move all tensors to the same device
+        true_class = true_class.to(device)
+        confusion_matrix = confusion_matrix.to(device)
         threshold = torch.tensor(threshold, device=device)
         
         # Compute MSE for each image in batch
         mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
         
         # Determine predicted class based on reconstruction quality
-        pred_class = torch.where(mse < threshold, true_class, 
+        pred_class = torch.where(mse < threshold, 
+                               true_class, 
                                torch.tensor(-1, device=device))
         
         # Update confusion matrix
@@ -94,6 +99,7 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
                 confusion_matrix[t][p] += 1
             else:
                 confusion_matrix[t][t] -= 1  # Count as misclassification
+
 
 
 def find_first_image(directory):
