@@ -100,12 +100,6 @@ def train_model(config):
         
         # Display confusion matrix below progress box
         print("\nConfusion Matrix:")
-        display_confusion_matrix(
-            confusion_matrix,
-            train_dataset.classes,
-            terminal_height,
-            progress_start + height + 2
-        )
     
     # Training loop
     for epoch in range(epochs):
