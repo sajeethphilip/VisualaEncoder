@@ -95,20 +95,24 @@ def train_model(config):
     best_batch_loss = float("inf")
     best_epoch_loss = float("inf")
     # Training loop
-    for epoch in range(epochs):
+     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
         num_batches = len(train_loader)
 
-        for batch_idx, (images, labels) in enumerate(train_loader):
+        for batch_idx, batch_data in enumerate(train_loader):
+            # Properly unpack the batch data
+            images, labels = batch_data  # This was missing
             images = images.to(device)
-            model=model.to(device)
-            reconstructed, _ = model(images)
-            loss = criterion_recon(reconstructed, images)
-            # Update best batch loss
-            if loss.item() < best_batch_loss:
-                best_batch_loss = loss.item()
+            labels = labels.to(device)  # Add this line
 
+            # Forward pass
+            reconstructed, _ = model(images)
+
+            # Calculate loss
+            loss = criterion_recon(reconstructed, images)
+
+            # Backward pass
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -116,7 +120,7 @@ def train_model(config):
             epoch_loss += loss.item()
             avg_loss = epoch_loss / (batch_idx + 1)
 
-            # Update confusion matrix
+            # Update confusion matrix with proper labels
             update_confusion_matrix(images, reconstructed, labels, confusion_matrix)
 
             # Update progress display with box and confusion matrix
