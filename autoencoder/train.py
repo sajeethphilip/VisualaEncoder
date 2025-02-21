@@ -82,18 +82,12 @@ def train_model(config):
         # Progress information
         print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (width-20)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
 
-        # Progress bar calculation
-        bar_width = width - 20  # Current approach
+        # Progress bar
+        bar_width = width - 20
         progress = batch / total_batches
         filled = int(bar_width * progress)
-        percentage = f"{progress:.1%}"
-
-        # Better approach:
-        bar_width = width - len(percentage) - 4  # Account for brackets and spacing
-        filled = int(bar_width * progress)
         bar = "█" * filled + "-" * (bar_width - filled)
-        progress_line = f"{vertical} [{bar}] {percentage} {vertical}"
-
+        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} [{bar}] {progress:.1%} {' ' * 5}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
 
         # Training metrics
         print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Batch: {batch}/{total_batches} {' ' * (width-25)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
