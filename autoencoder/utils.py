@@ -47,7 +47,7 @@ import torch
 from torchvision import transforms
 from PIL import Image
 from autoencoder.model import ModifiedAutoencoder
-
+from colorama import init, Fore, Back, Style
 def verify_latent_saving(dataset_name, class_folders):
     """Verify that latent space CSV files are properly saved."""
     base_dir = f"data/{dataset_name}/latent_space/train"
