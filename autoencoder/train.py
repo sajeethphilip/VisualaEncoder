@@ -80,7 +80,7 @@ def train_model(config):
         print(f"{Fore.GREEN}{top_left}{horizontal * width}{top_right}{Style.RESET_ALL}")
         
         # Progress information
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (width-20)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+	print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (width-20)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
         
 	# Progress bar calculation
 	bar_width = width - 20  # Current approach
