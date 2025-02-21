@@ -126,7 +126,7 @@ def train_model(config):
                     print(f"Processing class: {class_name} ({len(class_subset)} images)")
 
                     for images, _ in tqdm(class_loader, leave=False, position=terminal_height-2):
-                        images = images.to(device)  # Move images to device
+                        images = images #.to(device)  # Move images to device
                         _, latent_1d = model(images)
 
                         # Get paths for saving
