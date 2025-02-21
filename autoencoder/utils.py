@@ -29,7 +29,7 @@ import shutil
 import json
 from PIL import Image
 from tqdm import tqdm
-
+import torch.nn.functional as F
 import os
 import torch
 import torchvision
