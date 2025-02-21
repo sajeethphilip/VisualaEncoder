@@ -72,6 +72,15 @@ def verify_latent_saving(dataset_name, class_folders):
 
     return saved_files
 
+import os
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+import io
+from PIL import Image
+from colorama import init, Fore, Back, Style
+
 def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
     """
     Update confusion matrix and display using matplotlib with fixed frame size.
@@ -134,13 +143,23 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
                         ha='center', va='center',
                         color='white' if cm[i, j] > cm.max()/2 else 'black')
         
-        # Draw plot
-        plt.draw()
-        plt.pause(0.001)  # Small pause to allow plot to update
+        # Tight layout to prevent text cutoff
+        plt.tight_layout()
+        
+        # Save plot to buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+        buf.seek(0)
+        
+        # Clear plot
+        plt.close()
+        
+        # Display image
+        img = Image.open(buf)
+        display(img)
+        buf.close()
 
         return confusion_matrix
-
-
 
 
 
