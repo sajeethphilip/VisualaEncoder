@@ -4,7 +4,7 @@ import torch
 from torchvision import datasets, transforms
 from PIL import Image
 from autoencoder.train import train_model
-from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize,find_first_image,reconstruct_image,reconstruct_from_latent
+from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize,find_first_image,reconstruct_image,reconstruct_from_latent,display_header
 
 def create_default_json_config(dataset_name, data_dir, image_path):
     """Create a default JSON configuration file interactively."""
@@ -274,78 +274,36 @@ def check_and_fix_json(json_path, dataset_name, data_dir, image_path):
 
 def main():
     """Main function for user interaction."""
-    # Clear screen
+    # Clear screen and initialize colorama
     os.system('cls' if os.name == 'nt' else 'clear')
-
-    # Initialize colorama
     from colorama import init, Fore, Back, Style
     init()
 
     # Header and branding
-    print(f"\n{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}")
-    print(f"{Style.BRIGHT}{Fore.YELLOW}{'Visual Autoencoder Tool':^80}{Style.RESET_ALL}")
-    print(f"{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}\n")
+    display_header()
 
-    # Author and License information
-    print(f"{Style.BRIGHT}{Fore.WHITE}{'Author: ':>30}{Fore.YELLOW}Ninan Sajeeth Philip{Style.RESET_ALL}")
-    print(f"{Style.BRIGHT}{Fore.WHITE}{'Organisation: ':>30}{Fore.LIGHTGREEN_EX}Artificial Intelligence Research and Intelligent Systems{Style.RESET_ALL}")
-    print(f"{Style.BRIGHT}{Fore.LIGHTGREEN_EX}{'':>30}Thelliyoor -689544 India{Style.RESET_ALL}")
-    print(f"{Style.BRIGHT}{Fore.WHITE}{'License: ':>30}{Fore.BLUE}Creative Commons License{Style.RESET_ALL}\n")
-    print(f"\n{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}")
-    # Data source selection menu
-    print(f"{Style.BRIGHT}{Fore.CYAN}{'Select data source:':^80}{Style.RESET_ALL}")
-    print(f"{Style.BRIGHT}{Fore.WHITE}{'1. ':>35}{Fore.YELLOW}Torchvision dataset (e.g., CIFAR10, MNIST){Style.RESET_ALL}")
-    print(f"{Style.BRIGHT}{Fore.WHITE}{'2. ':>35}{Fore.YELLOW}URL to download dataset{Style.RESET_ALL}")
-    print(f"{Style.BRIGHT}{Fore.WHITE}{'3. ':>35}{Fore.YELLOW}Local file/folder{Style.RESET_ALL}\n")
+    # Mode selection first
+    print(f"\n{Style.BRIGHT}{Fore.CYAN}{'Select mode:':^80}{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'1. ':>35}{Fore.YELLOW}Train{Style.RESET_ALL}")
+    print(f"{Style.BRIGHT}{Fore.WHITE}{'2. ':>35}{Fore.YELLOW}Predict{Style.RESET_ALL}")
 
-    data_source = input(f"{Style.BRIGHT}{Fore.WHITE}Enter your choice (1/2/3): {Style.RESET_ALL}")
+    mode = input(f"{Style.BRIGHT}{Fore.WHITE}Enter your choice (1/2): {Style.RESET_ALL}")
 
     try:
-        if data_source == "1":
-            dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter dataset name (e.g., CIFAR10, MNIST): {Style.RESET_ALL}").upper()
-            config = setup_dataset(dataset_name)
-
-        elif data_source == "2":
-            url = input(f"{Style.BRIGHT}{Fore.WHITE}Enter the URL to download the dataset: {Style.RESET_ALL}")
-            dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
-            data_dir = extract_and_organize(url, dataset_name, is_url=True)
-            first_image = find_first_image(data_dir)
-            config = create_default_json_config(dataset_name, data_dir, first_image)
-
-        elif data_source == "3":
-            source_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter the path to the local file/folder: {Style.RESET_ALL}")
-            dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
-
-            if os.path.isfile(source_path) and source_path.endswith(('.zip', '.tar.gz', '.tgz', '.tar')):
-                data_dir = extract_and_organize(source_path, dataset_name)
-            else:
-                data_dir = source_path
-
-            first_image = find_first_image(data_dir)
-            config = create_default_json_config(dataset_name, data_dir, first_image)
-
-        else:
-            print(f"{Style.BRIGHT}{Fore.RED}Invalid choice. Exiting...{Style.RESET_ALL}")
-            return
-
-        # Mode selection
-        print(f"\n{Style.BRIGHT}{Fore.CYAN}{'Select mode:':^80}{Style.RESET_ALL}")
-        print(f"{Style.BRIGHT}{Fore.WHITE}{'1. ':>35}{Fore.YELLOW}Train{Style.RESET_ALL}")
-        print(f"{Style.BRIGHT}{Fore.WHITE}{'2. ':>35}{Fore.YELLOW}Predict{Style.RESET_ALL}")
-
-        mode = input(f"{Style.BRIGHT}{Fore.WHITE}Enter your choice (1/2): {Style.RESET_ALL}")
-
-        if mode == "1":
-            print(f"\n{Style.BRIGHT}{Fore.CYAN}Training the model...{Style.RESET_ALL}")
-            train_model(config)
-        elif mode == "2":
-            checkpoint_path = os.path.join(config["training"]["checkpoint_dir"], "best_model.pth")
+        if mode == "2":  # Predict mode
+            dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter dataset name: {Style.RESET_ALL}")
+            checkpoint_path = os.path.join(f"data/{dataset_name}/checkpoints", "best_model.pth")
 
             if not os.path.exists(checkpoint_path):
                 print(f"{Style.BRIGHT}{Fore.RED}No trained model found. Please train the model first.{Style.RESET_ALL}")
                 return
 
+            config_path = os.path.join(f"data/{dataset_name}", f"{dataset_name}.json")
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+
             print(f"\n{Style.BRIGHT}{Fore.CYAN}Reconstructing image(s)...{Style.RESET_ALL}")
+
             if config["training"].get("invert_DBNN", True):
                 default_csv_path = os.path.join(f"data/{dataset_name}/latent_space")
                 print(f"\nFound latent representations in: {default_csv_path}")
@@ -353,12 +311,41 @@ def main():
                 reconstruct_from_latent(csv_path, checkpoint_path, dataset_name, config)
             else:
                 input_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter path to image or folder to reconstruct: {Style.RESET_ALL}")
-                # Original image-based reconstruction
-                default_image_path = os.path.join(config["dataset"]["train_dir"])
-                image_path = input(
-                    f"Enter the path to the input image (default: {default_image_path}): "
-                ) or default_image_path
-                reconstruct_image(image_path, checkpoint_path, dataset_name, config)
+                reconstruct_image(input_path, checkpoint_path, dataset_name, config)
+
+        elif mode == "1":  # Train mode
+            # Data source selection menu
+            print(f"\n{Style.BRIGHT}{Fore.CYAN}{'Select data source:':^80}{Style.RESET_ALL}")
+            print(f"{Style.BRIGHT}{Fore.WHITE}{'1. ':>35}{Fore.YELLOW}Torchvision dataset (e.g., CIFAR10, MNIST){Style.RESET_ALL}")
+            print(f"{Style.BRIGHT}{Fore.WHITE}{'2. ':>35}{Fore.YELLOW}URL to download dataset{Style.RESET_ALL}")
+            print(f"{Style.BRIGHT}{Fore.WHITE}{'3. ':>35}{Fore.YELLOW}Local file/folder{Style.RESET_ALL}\n")
+
+            data_source = input(f"{Style.BRIGHT}{Fore.WHITE}Enter your choice (1/2/3): {Style.RESET_ALL}")
+
+            if data_source == "1":
+                dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter dataset name (e.g., CIFAR10, MNIST): {Style.RESET_ALL}").upper()
+                config = setup_dataset(dataset_name)
+            elif data_source == "2":
+                url = input(f"{Style.BRIGHT}{Fore.WHITE}Enter the URL to download the dataset: {Style.RESET_ALL}")
+                dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
+                data_dir = extract_and_organize(url, dataset_name, is_url=True)
+                first_image = find_first_image(data_dir)
+                config = create_default_json_config(dataset_name, data_dir, first_image)
+            elif data_source == "3":
+                source_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter the path to the local file/folder: {Style.RESET_ALL}")
+                dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
+                if os.path.isfile(source_path) and source_path.endswith(('.zip', '.tar.gz', '.tgz', '.tar')):
+                    data_dir = extract_and_organize(source_path, dataset_name)
+                else:
+                    data_dir = source_path
+                first_image = find_first_image(data_dir)
+                config = create_default_json_config(dataset_name, data_dir, first_image)
+            else:
+                print(f"{Style.BRIGHT}{Fore.RED}Invalid choice. Exiting...{Style.RESET_ALL}")
+                return
+
+            print(f"\n{Style.BRIGHT}{Fore.CYAN}Training the model...{Style.RESET_ALL}")
+            train_model(config)
 
         else:
             print(f"{Style.BRIGHT}{Fore.RED}Invalid mode selected. Exiting...{Style.RESET_ALL}")
@@ -369,4 +356,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
