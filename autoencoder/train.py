@@ -121,7 +121,7 @@ def train_model(config):
             avg_loss = epoch_loss / (batch_idx + 1)
             
             # Update confusion matrix
-            #update_confusion_matrix(images, reconstructed, labels, confusion_matrix)
+            update_confusion_matrix(images, reconstructed, labels, confusion_matrix)
             
             # Update progress display with box and confusion matrix
             draw_progress_box(epoch, batch_idx + 1, num_batches, loss.item(), avg_loss)
