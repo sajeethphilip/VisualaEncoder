@@ -111,9 +111,18 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix):
         from skimage.metrics import structural_similarity as ssim
         original_np = original.cpu().numpy()
         reconstructed_np = reconstructed.cpu().numpy()
+
+        # Determine the window size for SSIM
+        min_side = min(original_np.shape[2], original_np.shape[3])  # Minimum of height and width
+        win_size = min(7, min_side)  # Ensure win_size is <= smallest side of the image
+        if win_size % 2 == 0:  # Ensure win_size is odd
+            win_size -= 1
+
+        # Compute SSIM
         ssim_value = ssim(
             original_np, reconstructed_np,
-            multichannel=True,  # Set to False for grayscale images
+            win_size=win_size,  # Use adjusted window size
+            channel_axis=1,  # Set channel_axis for multichannel images (C is at axis 1 in PyTorch tensors)
             data_range=max_pixel
         )
 
