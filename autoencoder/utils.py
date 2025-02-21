@@ -127,7 +127,7 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix):
         )
 
         # Print metrics in a fixed position (e.g., below the progress box)
-        print(f"\033[20;0H\033[K")  # Move to line 20, column 0 and clear the line
+        print(f"\033[30;0H\033[K")  # Move to line 20, column 0 and clear the line
         print(f"Mean Squared Error (MSE): {mse.item():.6f}")  # Convert to float for display
         print(f"Peak Signal-to-Noise Ratio (PSNR): {psnr:.2f} dB")
         print(f"Structural Similarity Index (SSIM): {ssim_value:.4f}")
