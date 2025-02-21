@@ -101,11 +101,11 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix):
         reconstructed = reconstructed.to(device)
 
         # Compute Mean Squared Error (MSE)
-        mse = torch.mean((original - reconstructed) ** 2, dim=(1, 2, 3)).mean().item()
+        mse = torch.mean((original - reconstructed) ** 2, dim=(1, 2, 3)).mean()  # Keep as tensor
 
         # Compute Peak Signal-to-Noise Ratio (PSNR)
         max_pixel = 1.0  # Assuming images are normalized to [0, 1]
-        psnr = 20 * torch.log10(max_pixel / torch.sqrt(mse)).item()
+        psnr = 20 * torch.log10(max_pixel / torch.sqrt(mse)).item()  # Now mse is a tensor
 
         # Compute Structural Similarity Index (SSIM)
         from skimage.metrics import structural_similarity as ssim
@@ -119,12 +119,12 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix):
 
         # Print metrics in a fixed position (e.g., below the progress box)
         print(f"\033[20;0H\033[K")  # Move to line 20, column 0 and clear the line
-        print(f"Mean Squared Error (MSE): {mse:.6f}")
+        print(f"Mean Squared Error (MSE): {mse.item():.6f}")  # Convert to float for display
         print(f"Peak Signal-to-Noise Ratio (PSNR): {psnr:.2f} dB")
         print(f"Structural Similarity Index (SSIM): {ssim_value:.4f}")
 
         return {
-            "MSE": mse,
+            "MSE": mse.item(),  # Convert to float for return
             "PSNR": psnr,
             "SSIM": ssim_value
         }
