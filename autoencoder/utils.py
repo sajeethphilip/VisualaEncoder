@@ -78,7 +78,8 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
     """
     with torch.no_grad():
         # Compute MSE for each image in batch
-        mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
+        device=get_device()
+        mse = torch.mean((original - reconstructed)**2, dim=(1,2,3)).to(device)
 
         # Determine predicted class based on reconstruction quality
         pred_class = torch.where(mse < threshold, true_class, -1)
