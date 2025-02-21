@@ -92,7 +92,7 @@ def train_model(config):
         print(f"Training Epoch {epoch + 1}/{epochs}")
 
         for images, _ in tqdm(train_loader, leave=False, position=terminal_height-2):
-            images = images #.to(device)  # Move images to device
+            images = images.to(device)  # Move images to device
             reconstructed, _ = model(images)
 
             loss = criterion_recon(reconstructed, images)
