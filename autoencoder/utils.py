@@ -102,70 +102,44 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
         overall_acc = correct.sum() / total.sum() if total.sum() > 0 else torch.tensor(0.0)
 
         # Create matplotlib figure with fixed size
-        plt.close('all')  # Clear any existing plots
-        fig, ax = plt.subplots(figsize=(6, 5))
+        plt.close('all')
+        fig = plt.figure(figsize=(6, 4))
         
         # Convert confusion matrix to numpy for plotting
         cm = confusion_matrix.cpu().numpy()
+        
+        # Create custom colormap (red to green)
+        colors = ['#ff0000', '#ffff00', '#00ff00']  # Red -> Yellow -> Green
+        n_bins = 100
+        cmap = LinearSegmentedColormap.from_list("custom", colors, N=n_bins)
+        
+        # Plot heatmap
+        plt.imshow(cm, cmap=cmap)
+        plt.colorbar(fraction=0.046, pad=0.04)
+        
+        # Add labels
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.title(f'Confusion Matrix\nAccuracy: {overall_acc:.1%}')
+        
+        # Add ticks
         num_classes = cm.shape[0]
+        plt.xticks(range(num_classes))
+        plt.yticks(range(num_classes))
         
-        # Create heatmap
-        im = ax.imshow(cm, cmap='RdYlGn')  # Red for errors, Yellow for medium, Green for correct
-        
-        # Add colorbar
-        plt.colorbar(im)
-        
-        # Set labels
-        ax.set_xlabel('Predicted')
-        ax.set_ylabel('True')
-        ax.set_title(f'Confusion Matrix\nAccuracy: {overall_acc:.1%}')
-        
-        # Add class labels
-        ax.set_xticks(np.arange(num_classes))
-        ax.set_yticks(np.arange(num_classes))
-        ax.set_xticklabels(range(num_classes))
-        ax.set_yticklabels(range(num_classes))
-        
-        # Rotate tick labels if needed
-        plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-                rotation_mode="anchor")
-        
-        # Add text annotations in cells
+        # Add text annotations
         for i in range(num_classes):
             for j in range(num_classes):
-                text = ax.text(j, i, f'{cm[i, j]:.0f}',
-                             ha="center", va="center", 
-                             color="black" if cm[i, j] < cm.max()/2 else "white")
+                plt.text(j, i, f'{cm[i, j]:.0f}',
+                        ha='center', va='center',
+                        color='white' if cm[i, j] > cm.max()/2 else 'black')
         
-        # Add class accuracies on the right
-        acc_text = "Class Accuracies:\n"
-        for i in range(num_classes):
-            acc_text += f"Class {i}: {class_acc[i]:.1%}\n"
-        plt.figtext(1.1, 0.5, acc_text, ha='left', va='center')
-        
-        # Adjust layout to prevent text cutoff
-        plt.tight_layout()
-        
-        # Save plot to a temporary buffer
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
-        buf.seek(0)
-        
-        # Clear plot to free memory
-        plt.close()
-        
-        # Display image using terminal image display (requires iTerm2 or similar)
-        # You might need to adjust this based on your terminal capabilities
-        try:
-            from PIL import Image
-            img = Image.open(buf)
-            # Optional: resize image if needed
-            # img = img.resize((width, height))
-            display(img)
-        except ImportError:
-            print("PIL not available for image display")
-        finally:
-            buf.close()
+        # Draw plot
+        plt.draw()
+        plt.pause(0.001)  # Small pause to allow plot to update
+
+        return confusion_matrix
+
 
 
 
