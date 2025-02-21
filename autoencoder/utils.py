@@ -81,51 +81,74 @@ import io
 from PIL import Image
 from colorama import init, Fore, Back, Style
 
-def update_confusion_matrix(original, reconstructed, true_labels, confusion_matrix, model, device):
+def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
     """
-    Update the confusion matrix based on the classification accuracy of the model.
-
-    Args:
-        original: Original images tensor (B, C, H, W)
-        reconstructed: Reconstructed images tensor (B, C, H, W)
-        true_labels: True class labels tensor (B)
-        confusion_matrix: Running confusion matrix tensor (num_classes, num_classes)
-        model: The trained model (used for classification)
-        device: The device (CPU/GPU) where computations are performed
-
-    Returns:
-        Updated confusion matrix
+    Update confusion matrix and display using matplotlib with fixed frame size.
     """
     with torch.no_grad():
-        # Ensure all tensors are on the same device
-        true_labels = true_labels.to(device)
+        # Get device and ensure all tensors are on same device
+        device = original.device
+        true_class = true_class.to(device).long()
         confusion_matrix = confusion_matrix.to(device)
+        threshold = torch.tensor(threshold, device=device)
 
-        # Pass the reconstructed images through the model's classifier (if available)
-        if hasattr(model, 'classifier'):
-            # Use the classifier to get predicted labels
-            logits = model.classifier(reconstructed)
-            pred_labels = torch.argmax(logits, dim=1)
-        else:
-            # If no classifier is available, use the true labels as predictions (fallback)
-            pred_labels = true_labels
+        # Compute MSE and update confusion matrix
+        mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
+        pred_class = torch.where(mse < threshold, true_class,
+                               torch.tensor(-1, device=device).long())
 
-        # Update confusion matrix
-        for t, p in zip(true_labels, pred_labels):
-            confusion_matrix[t, p] += 1
+        for t, p in zip(true_class, pred_class):
+            if p != -1:
+                confusion_matrix[t][p] += 1
+            else:
+                confusion_matrix[t][t] -= 1
 
         # Calculate metrics
         total = confusion_matrix.sum(dim=1).float()
         correct = confusion_matrix.diag().float()
-        accuracy = torch.where(total > 0, correct / total, torch.zeros_like(total))
-        overall_accuracy = correct.sum() / total.sum() if total.sum() > 0 else torch.tensor(0.0)
+        class_acc = torch.where(total > 0, correct / total,
+                              torch.zeros_like(total, dtype=torch.float32))
+        overall_acc = correct.sum() / total.sum() if total.sum() > 0 else torch.tensor(0.0)
 
-        # Print metrics in a fixed position (e.g., below the progress box)
-        print(f"\033[20;0H\033[K")  # Move to line 20, column 0 and clear the line
-        print(f"Overall Accuracy: {overall_accuracy:.2%}")
-        print(f"Class-wise Accuracy: {[f'{acc:.2%}' for acc in accuracy]}")
+        # Create matplotlib figure with fixed size
+        plt.close('all')
+        fig = plt.figure(figsize=(6, 4))
+
+        # Convert confusion matrix to numpy for plotting
+        cm = confusion_matrix.cpu().numpy()
+
+        # Create custom colormap (red to green)
+        colors = ['#ff0000', '#ffff00', '#00ff00']  # Red -> Yellow -> Green
+        n_bins = 100
+        cmap = LinearSegmentedColormap.from_list("custom", colors, N=n_bins)
+
+        # Plot heatmap
+        plt.imshow(cm, cmap=cmap)
+        plt.colorbar(fraction=0.046, pad=0.04)
+
+        # Add labels
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.title(f'Confusion Matrix\nAccuracy: {overall_acc:.1%}')
+
+        # Add ticks
+        num_classes = cm.shape[0]
+        plt.xticks(range(num_classes))
+        plt.yticks(range(num_classes))
+
+        # Add text annotations
+        for i in range(num_classes):
+            for j in range(num_classes):
+                plt.text(j, i, f'{cm[i, j]:.0f}',
+                        ha='center', va='center',
+                        color='white' if cm[i, j] > cm.max()/2 else 'black')
+
+        # Draw plot
+        plt.draw()
+        plt.pause(0.001)  # Small pause to allow plot to update
 
         return confusion_matrix
+
 
 
 
