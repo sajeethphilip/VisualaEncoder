@@ -143,23 +143,12 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
                         ha='center', va='center',
                         color='white' if cm[i, j] > cm.max()/2 else 'black')
         
-        # Tight layout to prevent text cutoff
-        plt.tight_layout()
-        
-        # Save plot to buffer
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
-        buf.seek(0)
-        
-        # Clear plot
-        plt.close()
-        
-        # Display image
-        img = Image.open(buf)
-        display(img)
-        buf.close()
+        # Draw plot
+        plt.draw()
+        plt.pause(0.001)  # Small pause to allow plot to update
 
         return confusion_matrix
+
 
 
 
