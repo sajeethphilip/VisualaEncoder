@@ -81,7 +81,7 @@ import io
 from PIL import Image
 from colorama import init, Fore, Back, Style
 
-def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
+def update_confusion_matrix(original, reconstructed, true_labels, confusion_matrix, threshold=0.1):
     """
     Update confusion matrix and display using matplotlib with fixed frame size.
     """
@@ -98,7 +98,7 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
                                torch.tensor(-1, device=device).long())
 
         # Update confusion matrix based on reconstruction quality
-        for i, label in enumerate(labels):
+        for i, label in enumerate(true_labels):
             if mse[i] < threshold:
                 confusion_matrix[label][label] += 1
             else:
