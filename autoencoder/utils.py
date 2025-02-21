@@ -29,7 +29,7 @@ import shutil
 import json
 from PIL import Image
 from tqdm import tqdm
-import torch.nn.functional as F
+
 import os
 import torch
 import torchvision
@@ -81,36 +81,50 @@ import io
 from PIL import Image
 from colorama import init, Fore, Back, Style
 
-def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
+def update_confusion_matrix(original, reconstructed, true_labels, confusion_matrix, threshold=0.1):
     """
-    Update confusion matrix based on reconstruction quality.
+    Update the confusion matrix based on the reconstruction quality.
+    This function ensures the screen remains stable and only updates the confusion matrix.
+
     Args:
-        original: Original images tensor
-        reconstructed: Reconstructed images tensor
-        true_class: True class labels tensor
-        confusion_matrix: The confusion matrix to update
+        original: Original images tensor (B, C, H, W)
+        reconstructed: Reconstructed images tensor (B, C, H, W)
+        true_labels: True class labels tensor (B)
+        confusion_matrix: Running confusion matrix tensor (num_classes, num_classes)
         threshold: MSE threshold for considering reconstruction successful
+
+    Returns:
+        Updated confusion matrix
     """
     with torch.no_grad():
-        # Move tensors to same device
+        # Ensure all tensors are on the same device
         device = original.device
-        true_class = true_class.to(device)
+        true_labels = true_labels.to(device)
         confusion_matrix = confusion_matrix.to(device)
 
-        # Compute MSE for reconstruction quality
-        mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
+        # Compute MSE for each image in the batch
+        mse = torch.mean((original - reconstructed) ** 2, dim=(1, 2, 3))
+
+        # Determine predicted labels based on reconstruction quality
+        pred_labels = torch.where(mse < threshold, true_labels, torch.tensor(-1, device=device))
 
         # Update confusion matrix
-        for i, (error, label) in enumerate(zip(mse, true_class)):
-            label = label.item()
-            if error < threshold:
-                # Good reconstruction - increment diagonal
-                confusion_matrix[label][label] += 1
-            else:
-                # Poor reconstruction - decrement diagonal
-                confusion_matrix[label][label] = max(0, confusion_matrix[label][label] - 1)
+        for t, p in zip(true_labels, pred_labels):
+            if p != -1:  # Only update if reconstruction is successful
+                confusion_matrix[t, p] += 1
 
+        # Calculate metrics
+        total = confusion_matrix.sum(dim=1).float()
+        correct = confusion_matrix.diag().float()
+        accuracy = torch.where(total > 0, correct / total, torch.zeros_like(total))
+        overall_accuracy = correct.sum() / total.sum() if total.sum() > 0 else torch.tensor(0.0)
 
+        # Print metrics in a fixed position (e.g., below the progress box)
+        print(f"\033[30;10H\033[K")  # Move to line 30, column 10 and clear the line
+        print(f"Overall Accuracy: {overall_accuracy:.2%}")
+        print(f"Class-wise Accuracy: {[f'{acc:.2%}' for acc in accuracy]}")
+
+        return confusion_matrix
 
 
 
@@ -1395,7 +1409,6 @@ def load_local_dataset(dataset_name, transform=None):
 
     return dataset
 
-
 def load_dataset_config(dataset_name):
     """Load dataset configuration from JSON file."""
     config_path = f"data/{dataset_name}/{dataset_name}.json"
@@ -1403,3 +1416,10 @@ def load_dataset_config(dataset_name):
         config = json.load(f)
     return config["dataset"]
 
+
+# Example usage
+if __name__ == "__main__":
+    image_path = "path/to/input/image.png"  # Replace with the path to your input image
+    checkpoint_path = "Model/checkpoint/Best_CIFAR10.pth"  # Replace with the path to your model checkpoint
+    dataset_name = "CIFAR10"  # Replace with the dataset name
+    reconstruct_image(image_path, checkpoint_path, dataset_name)
