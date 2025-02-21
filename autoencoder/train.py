@@ -115,6 +115,7 @@ def train_model(config):
         
         for batch_idx, (images, labels) in enumerate(train_loader):
             images = images.to(device)
+            model=model.to(device)
             reconstructed, _ = model(images)
             loss = criterion_recon(reconstructed, images)
             
