@@ -100,6 +100,58 @@ def update_confusion_matrix(original, reconstructed, true_class, confusion_matri
             else:
                 confusion_matrix[t][t] -= 1  # Count as misclassification
 
+def display_confusion_matrix(
+    confusion_matrix: Union[np.ndarray, torch.Tensor],
+    class_names: List[str],
+    terminal_height: int,
+    header_height: int
+) -> None:
+    """
+    Display a scaled confusion matrix with proper formatting.
+    """
+    # Convert to numpy if it's a torch tensor
+    if isinstance(confusion_matrix, torch.Tensor):
+        confusion_matrix = confusion_matrix.cpu().numpy()
+
+    # Calculate metrics
+    correct = np.diagonal(confusion_matrix)
+    total = confusion_matrix.sum(axis=1)
+    accuracy = np.where(total > 0, correct / total, 0)
+    overall_accuracy = np.sum(correct) / np.sum(total) if np.sum(total) > 0 else 0
+
+    # Get terminal width
+    terminal_width = os.get_terminal_size().columns - 2
+
+    # Calculate scaled width for each column
+    num_classes = len(class_names)
+    col_width = min(8, max(4, (terminal_width - 10) // (num_classes + 1)))
+    
+    # Create the display string
+    display_str = "\n" * header_height  # Move past header
+
+    # Add class-wise accuracy (compact format)
+    display_str += "Class Accuracies: "
+    acc_str = " ".join([f"{i}:{accuracy[i]:.1%}" for i in range(num_classes)])
+    display_str += acc_str + "\n"
+    
+    # Add overall accuracy
+    display_str += f"Overall Accuracy: {overall_accuracy:.1%}\n\n"
+
+    # Add confusion matrix header
+    display_str += "Confusion Matrix:\n"
+    header = "True\\Pred|" + "|".join(f"{name:^{col_width}}" for name in class_names) + "|\n"
+    display_str += header
+    display_str += "-" * len(header) + "\n"
+
+    # Add matrix rows
+    for i, true_class in enumerate(class_names):
+        row = f"{i:^9}|"
+        row += "|".join(f"{confusion_matrix[i, j]:^{col_width}.0f}" for j in range(num_classes))
+        row += "|\n"
+        display_str += row
+
+    # Clear screen from cursor position and display matrix
+    print(f"\033[{header_height}H\033[J" + display_str)
 
 
 def find_first_image(directory):
