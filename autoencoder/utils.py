@@ -209,8 +209,10 @@ def save_1d_latent_to_csv(latent_1d, image_path, dataset_name, metadata=None):
     df.to_csv(csv_path, index=False)
     return csv_path
 def display_header():
-   # Header and branding
+    """Display header with branding and class distribution."""
     print("\033[2J\033[H")  # Clear screen
+
+    # Header and branding
     print(f"\n{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}")
     print(f"{Style.BRIGHT}{Fore.YELLOW}{'Visual Autoencoder Tool':^80}{Style.RESET_ALL}")
     print(f"{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}\n")
@@ -220,12 +222,24 @@ def display_header():
     print(f"{Style.BRIGHT}{Fore.WHITE}{'Organisation: ':>30}{Fore.LIGHTGREEN_EX}Artificial Intelligence Research and Intelligent Systems{Style.RESET_ALL}")
     print(f"{Style.BRIGHT}{Fore.LIGHTGREEN_EX}{'':>30}Thelliyoor -689544 India{Style.RESET_ALL}")
     print(f"{Style.BRIGHT}{Fore.WHITE}{'License: ':>30}{Fore.BLUE}Creative Commons License{Style.RESET_ALL}\n")
-    print(f"\n{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}")
-    # Data source selection menu
-    print(f"{Style.BRIGHT}{Fore.CYAN}{'Select data source:':^80}{Style.RESET_ALL}")
-    print(f"{Style.BRIGHT}{Fore.WHITE}{'1. ':>35}{Fore.YELLOW}Torchvision dataset (e.g., CIFAR10, MNIST){Style.RESET_ALL}")
-    print(f"{Style.BRIGHT}{Fore.WHITE}{'2. ':>35}{Fore.YELLOW}URL to download dataset{Style.RESET_ALL}")
-    print(f"{Style.BRIGHT}{Fore.WHITE}{'3. ':>35}{Fore.YELLOW}Local file/folder{Style.RESET_ALL}\n")
+    print(f"{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}")
+
+    # Add class distribution if available
+    try:
+        dataset_name = os.path.basename(os.getcwd().split('data/')[-1])
+        train_dir = f"data/{dataset_name}/train"
+        if os.path.exists(train_dir):
+            print(f"\n{Style.BRIGHT}{Fore.CYAN}Class Distribution:{Style.RESET_ALL}")
+            class_dirs = [d for d in os.listdir(train_dir) if os.path.isdir(os.path.join(train_dir, d))]
+            for class_name in class_dirs:
+                class_path = os.path.join(train_dir, class_name)
+                num_samples = len([f for f in os.listdir(class_path) if f.endswith(('.png', '.jpg', '.jpeg'))])
+                print(f"{Style.BRIGHT}{Fore.WHITE}{class_name:>30}: {Fore.YELLOW}{num_samples} samples{Style.RESET_ALL}")
+    except Exception:
+        pass  # Skip class distribution if not available
+
+    print(f"\n{Style.BRIGHT}{Fore.CYAN}{'='*100}{Style.RESET_ALL}\n")
+
 
 
 def display_confusion_matrix(
