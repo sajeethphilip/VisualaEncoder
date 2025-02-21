@@ -83,6 +83,7 @@ def train_model(config):
 
         for batch_idx, (images, _) in enumerate(train_loader):
             images = images.to(device)
+            model=model.to(device)
             reconstructed, latent_1d = model(images)
             loss = criterion_recon(reconstructed, images)
 
