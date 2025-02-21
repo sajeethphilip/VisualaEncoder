@@ -2,13 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from utils import get_device
 
 class CosineLatentMapper(nn.Module):
     def __init__(self, high_dim=512, device=None):
         super(CosineLatentMapper, self).__init__()
         self.high_dim = high_dim
-        self.device = get_device() #device if device is not None else torch.device("cpu")
+        self.device = device if device is not None else torch.device("cpu")
         self._initialize_frequencies()
 
     def _initialize_frequencies(self):
