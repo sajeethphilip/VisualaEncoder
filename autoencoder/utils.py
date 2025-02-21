@@ -81,37 +81,38 @@ import io
 from PIL import Image
 from colorama import init, Fore, Back, Style
 
-def update_confusion_matrix(original, reconstructed, true_labels, confusion_matrix, threshold=0.1):
+def update_confusion_matrix(original, reconstructed, true_labels, confusion_matrix, model, device):
     """
-    Update the confusion matrix based on the reconstruction quality.
-    This function ensures the screen remains stable and only updates the confusion matrix.
+    Update the confusion matrix based on the classification accuracy of the model.
 
     Args:
         original: Original images tensor (B, C, H, W)
         reconstructed: Reconstructed images tensor (B, C, H, W)
         true_labels: True class labels tensor (B)
         confusion_matrix: Running confusion matrix tensor (num_classes, num_classes)
-        threshold: MSE threshold for considering reconstruction successful
+        model: The trained model (used for classification)
+        device: The device (CPU/GPU) where computations are performed
 
     Returns:
         Updated confusion matrix
     """
     with torch.no_grad():
         # Ensure all tensors are on the same device
-        device = original.device
         true_labels = true_labels.to(device)
         confusion_matrix = confusion_matrix.to(device)
 
-        # Compute MSE for each image in the batch
-        mse = torch.mean((original - reconstructed) ** 2, dim=(1, 2, 3))
-
-        # Determine predicted labels based on reconstruction quality
-        pred_labels = torch.where(mse < threshold, true_labels, torch.tensor(-1, device=device))
+        # Pass the reconstructed images through the model's classifier (if available)
+        if hasattr(model, 'classifier'):
+            # Use the classifier to get predicted labels
+            logits = model.classifier(reconstructed)
+            pred_labels = torch.argmax(logits, dim=1)
+        else:
+            # If no classifier is available, use the true labels as predictions (fallback)
+            pred_labels = true_labels
 
         # Update confusion matrix
         for t, p in zip(true_labels, pred_labels):
-            if p != -1:  # Only update if reconstruction is successful
-                confusion_matrix[t, p] += 1
+            confusion_matrix[t, p] += 1
 
         # Calculate metrics
         total = confusion_matrix.sum(dim=1).float()
@@ -120,7 +121,7 @@ def update_confusion_matrix(original, reconstructed, true_labels, confusion_matr
         overall_accuracy = correct.sum() / total.sum() if total.sum() > 0 else torch.tensor(0.0)
 
         # Print metrics in a fixed position (e.g., below the progress box)
-        print(f"\033[30;10H\033[K")  # Move to line 30, column 10 and clear the line
+        print(f"\033[20;0H\033[K")  # Move to line 20, column 0 and clear the line
         print(f"Overall Accuracy: {overall_accuracy:.2%}")
         print(f"Class-wise Accuracy: {[f'{acc:.2%}' for acc in accuracy]}")
 

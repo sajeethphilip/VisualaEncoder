@@ -62,7 +62,7 @@ def train_model(config):
     def draw_progress_box(epoch, batch, total_batches, loss, avg_loss):
         """Draw a green box around progress information."""
         # Move cursor to progress area
-        print(f"\033[{progress_start}20H")
+        print(f"\033[{progress_start}H")
 
         # Box drawing characters
         top_left = "╔"
