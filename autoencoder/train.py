@@ -89,7 +89,7 @@ def train_model(config):
         num_batches = 0
 
         # Update progress at bottom of screen
-        print(f"\033[{terminal_height};0H")  # Move to bottom
+        print(f"\033[{terminal_height-14};0H")  # Move to bottom
         print(f"Training Epoch {epoch + 1}/{epochs}")
 
         for images, _ in tqdm(train_loader, leave=False, position=terminal_height-2):
@@ -113,7 +113,7 @@ def train_model(config):
             save_checkpoint(model, epoch + 1, avg_epoch_loss, config, checkpoint_path)
 
             # Generate latent space class by class
-            print(f"\033[{terminal_height};0H")
+            print(f"\033[{terminal_height-14};0H")
             print("Generating latent space representations...")
 
             model.eval()
@@ -131,10 +131,10 @@ def train_model(config):
                         num_workers=config["training"]["num_workers"]
                     )
 
-                    print(f"\033[{terminal_height};0H")
+                    print(f"\033[{terminal_height-14};0H")
                     print(f"Processing class: {class_name} ({len(class_subset)} images)")
 
-                    for images, _ in tqdm(class_loader, leave=False, position=terminal_height-2):
+                    for images, _ in tqdm(class_loader, leave=False, position=terminal_height-14-2):
                         images = images.to(device)  # Move images to device
                         model=model.to(device)
                         _, latent_1d = model(images)
@@ -149,11 +149,11 @@ def train_model(config):
             patience_counter += 1
 
         if patience_counter >= patience:
-            print(f"\033[{terminal_height};0H")
+            print(f"\033[{terminal_height-14};0H")
             print(f"No improvement for {patience} epochs. Training stopped.")
             break
 
-    print(f"\033[{terminal_height};0H")
+    print(f"\033[{terminal_height-14};0H")
     print("Training complete!")
     return model
 
