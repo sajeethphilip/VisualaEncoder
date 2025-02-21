@@ -81,73 +81,53 @@ import io
 from PIL import Image
 from colorama import init, Fore, Back, Style
 
-def update_confusion_matrix(original, reconstructed, true_class, confusion_matrix, threshold=0.1):
+def update_confusion_matrix(original, reconstructed, labels, confusion_matrix):
     """
-    Update confusion matrix and display using matplotlib with fixed frame size.
+    Update the confusion matrix based on the similarity between original and reconstructed images.
+
+    Args:
+        original: Original images tensor (B, C, H, W)
+        reconstructed: Reconstructed images tensor (B, C, H, W)
+        labels: True class labels tensor (B) - Not used in this version
+        confusion_matrix: Running confusion matrix tensor (num_classes, num_classes) - Not used in this version
+
+    Returns:
+        Dictionary containing similarity metrics for the batch
     """
     with torch.no_grad():
-        # Get device and ensure all tensors are on same device
+        # Ensure all tensors are on the same device
         device = original.device
-        true_class = true_class.to(device).long()
-        confusion_matrix = confusion_matrix.to(device)
-        threshold = torch.tensor(threshold, device=device)
+        original = original.to(device)
+        reconstructed = reconstructed.to(device)
 
-        # Compute MSE and update confusion matrix
-        mse = torch.mean((original - reconstructed)**2, dim=(1,2,3))
-        pred_class = torch.where(mse < threshold, true_class,
-                               torch.tensor(-1, device=device).long())
+        # Compute Mean Squared Error (MSE)
+        mse = torch.mean((original - reconstructed) ** 2, dim=(1, 2, 3)).mean().item()
 
-        for t, p in zip(true_class, pred_class):
-            if p != -1:
-                confusion_matrix[t][p] += 1
-            else:
-                confusion_matrix[t][t] -= 1
+        # Compute Peak Signal-to-Noise Ratio (PSNR)
+        max_pixel = 1.0  # Assuming images are normalized to [0, 1]
+        psnr = 20 * torch.log10(max_pixel / torch.sqrt(mse)).item()
 
-        # Calculate metrics
-        total = confusion_matrix.sum(dim=1).float()
-        correct = confusion_matrix.diag().float()
-        class_acc = torch.where(total > 0, correct / total,
-                              torch.zeros_like(total, dtype=torch.float32))
-        overall_acc = correct.sum() / total.sum() if total.sum() > 0 else torch.tensor(0.0)
+        # Compute Structural Similarity Index (SSIM)
+        from skimage.metrics import structural_similarity as ssim
+        original_np = original.cpu().numpy()
+        reconstructed_np = reconstructed.cpu().numpy()
+        ssim_value = ssim(
+            original_np, reconstructed_np,
+            multichannel=True,  # Set to False for grayscale images
+            data_range=max_pixel
+        )
 
-        # Create matplotlib figure with fixed size
-        plt.close('all')
-        fig = plt.figure(figsize=(6, 4))
+        # Print metrics in a fixed position (e.g., below the progress box)
+        print(f"\033[20;0H\033[K")  # Move to line 20, column 0 and clear the line
+        print(f"Mean Squared Error (MSE): {mse:.6f}")
+        print(f"Peak Signal-to-Noise Ratio (PSNR): {psnr:.2f} dB")
+        print(f"Structural Similarity Index (SSIM): {ssim_value:.4f}")
 
-        # Convert confusion matrix to numpy for plotting
-        cm = confusion_matrix.cpu().numpy()
-
-        # Create custom colormap (red to green)
-        colors = ['#ff0000', '#ffff00', '#00ff00']  # Red -> Yellow -> Green
-        n_bins = 100
-        cmap = LinearSegmentedColormap.from_list("custom", colors, N=n_bins)
-
-        # Plot heatmap
-        plt.imshow(cm, cmap=cmap)
-        plt.colorbar(fraction=0.046, pad=0.04)
-
-        # Add labels
-        plt.xlabel('Predicted')
-        plt.ylabel('True')
-        plt.title(f'Confusion Matrix\nAccuracy: {overall_acc:.1%}')
-
-        # Add ticks
-        num_classes = cm.shape[0]
-        plt.xticks(range(num_classes))
-        plt.yticks(range(num_classes))
-
-        # Add text annotations
-        for i in range(num_classes):
-            for j in range(num_classes):
-                plt.text(j, i, f'{cm[i, j]:.0f}',
-                        ha='center', va='center',
-                        color='white' if cm[i, j] > cm.max()/2 else 'black')
-
-        # Draw plot
-        plt.draw()
-        plt.pause(0.001)  # Small pause to allow plot to update
-
-        return confusion_matrix
+        return {
+            "MSE": mse,
+            "PSNR": psnr,
+            "SSIM": ssim_value
+        }
 
 
 
