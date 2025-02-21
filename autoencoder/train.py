@@ -10,7 +10,7 @@ from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_
 from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv, save_batch_latents, display_header
 from datetime import datetime
 from tqdm import tqdm
-
+from colorama import init, Fore, Back, Style
 def train_model(config):
     """Train the autoencoder model with clean display and class-wise latent generation."""
 
