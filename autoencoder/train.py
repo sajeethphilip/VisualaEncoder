@@ -103,7 +103,7 @@ def train_model(config):
         model.train()
         epoch_loss = 0.0
         num_batches = len(train_loader)
-
+        display_header()
         for batch_idx, (images, labels) in enumerate(train_loader):
             images = images.to(device)
             model=model.to(device)
