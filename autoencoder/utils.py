@@ -421,7 +421,7 @@ def find_first_image(directory):
     raise FileNotFoundError(f"No image files found in {directory}")
 
 def extract_and_organize(source_path, dataset_name, is_url=False):
-    """Unified function to handle compressed files and organize dataset"""
+    """Unified function to handle compressed files and organize dataset."""
     data_dir = os.path.join("data", dataset_name)
     temp_dir = os.path.join("temp", dataset_name)
     os.makedirs(temp_dir, exist_ok=True)
@@ -463,7 +463,8 @@ def extract_and_organize(source_path, dataset_name, is_url=False):
                 elif 'test' in root.lower():
                     dest_dir = test_dir
                 else:
-                    dest_dir = train_dir  # Default to train
+                    # Default to train folder
+                    dest_dir = train_dir
 
                 # Create class subdirectories if present
                 class_name = os.path.basename(os.path.dirname(src_path))
@@ -472,7 +473,12 @@ def extract_and_organize(source_path, dataset_name, is_url=False):
                     os.makedirs(dest_dir, exist_ok=True)
 
                 shutil.copy2(src_path, os.path.join(dest_dir, file))
-    create_json_config(data_dir)
+
+    # Create JSON config only if it doesn't exist
+    json_path = os.path.join(data_dir, f"{dataset_name}.json")
+    if not os.path.exists(json_path):
+        create_json_config(data_dir)
+
     # Cleanup
     shutil.rmtree(temp_dir)
     return data_dir
