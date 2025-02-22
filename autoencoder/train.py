@@ -39,7 +39,7 @@ def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_star
 
     # Progress bar
     progress = batch / total_batches
-    bar_width = box_width - 10
+    bar_width = box_width - 14
     filled = int(bar_width * progress)
     bar = "█" * filled + "-" * (bar_width - filled)
 
@@ -50,13 +50,13 @@ def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_star
     print(f"{Fore.GREEN}{top_left}{horizontal * box_width}{top_right}{Style.RESET_ALL}")
 
     # Epoch and progress information
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (box_width - 12)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (box_width - 13)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
     print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} [{bar}] {progress:.1%} {' ' * 5}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
 
     # Training metrics
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Batch: {batch}/{total_batches} {' ' * (box_width - 14)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Current Loss: {loss:.6f} {' ' * (box_width - 23)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Average Loss: {avg_loss:.6f} {' ' * (box_width - 23)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Batch: {batch}/{total_batches} {' ' * (box_width - 15)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Current Loss: {loss:.6f} {' ' * (box_width - 24)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Average Loss: {avg_loss:.6f} {' ' * (box_width - 24)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
 
     # Draw bottom border
     print(f"{Fore.GREEN}{bottom_left}{horizontal * box_width}{bottom_right}{Style.RESET_ALL}")
