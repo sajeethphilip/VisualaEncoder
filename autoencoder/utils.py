@@ -1039,7 +1039,17 @@ def save_latent_space_for_epoch(model, data_loader, device, dataset_name):
 
             # Store latent space representations and image paths
             latent_space.append(latent.cpu())
-            image_paths.extend(data_loader.dataset.samples)  # Get paths of the images
+
+            # Extract image paths correctly
+            if hasattr(data_loader.dataset, 'samples'):
+                # If samples is a list of tuples (image_path, label), extract only the paths
+                if isinstance(data_loader.dataset.samples[0], tuple):
+                    image_paths.extend([sample[0] for sample in data_loader.dataset.samples])
+                else:
+                    # If samples is a list of strings (image paths), use it directly
+                    image_paths.extend(data_loader.dataset.samples)
+            else:
+                raise ValueError("DataLoader dataset does not have 'samples' attribute.")
 
     # Concatenate all batches
     latent_space = torch.cat(latent_space, dim=0)
