@@ -581,15 +581,6 @@ def create_confusion_matrix(num_classes):
 
 
 def save_batch_latents(batch_latents, image_paths, dataset_name, metadata=None):
-    """
-    Save latent representations with original filenames and metadata.
-
-    Args:
-        batch_latents: Tensor of latent representations
-        image_paths: List of paths to original images
-        dataset_name: Name of the dataset
-        metadata: Optional dictionary containing additional metadata
-    """
     base_latent_dir = os.path.join(f"data/{dataset_name}", "latent_space")
 
     for latent, path in zip(batch_latents, image_paths):
@@ -607,7 +598,7 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, metadata=None):
             'type': ['metadata'] * (len(metadata) if metadata else 0) + ['latent_values'],
             'key': (list(metadata.keys()) if metadata else []) + ['values'],
             'value': (list(map(str, metadata.values())) if metadata else []) +
-                    [','.join(map(str, latent.detach().cpu().numpy().flatten()))]
+                    [','.join(map(str, latent.detach().cpu().numpy().flatten()))]  # Move to CPU before numpy
         }
 
         # Save as DataFrame
