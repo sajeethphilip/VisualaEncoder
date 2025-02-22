@@ -6,20 +6,29 @@ from PIL import Image
 from autoencoder.train import train_model
 from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize,find_first_image,reconstruct_image,reconstruct_from_latent,display_header
 
-def create_default_json_config(dataset_name, data_dir, image_path):
-    """Create a default JSON configuration file interactively."""
+def create_default_json_config(dataset_name, data_dir, image_path, latent_dim=128, embedding_dim=64, learning_rate=0.001, batch_size=32, epochs=20):
+    """
+    Create a default JSON configuration file interactively.
+
+    Args:
+        dataset_name: Name of the dataset.
+        data_dir: Directory containing the dataset.
+        image_path: Path to the first image in the dataset.
+        latent_dim: Latent space dimension (default: 128).
+        embedding_dim: Embedding dimension (default: 64).
+        learning_rate: Learning rate (default: 0.001).
+        batch_size: Batch size (default: 32).
+        epochs: Number of epochs (default: 20).
+
+    Returns:
+        JSON configuration dictionary.
+    """
     # Read the first image to determine its shape
     image = Image.open(image_path)
     width, height = image.size
     in_channels = 1 if image.mode == "L" else 3  # Grayscale or RGB
 
-    # Interactive configuration
-    print("\nConfiguring the autoencoder...")
-    latent_dim = int(input("Enter the latent space dimension (default: 128): ") or 128)
-    embedding_dim = int(input("Enter the embedding dimension (default: 64): ") or 64)
-    learning_rate = float(input("Enter the learning rate (default: 0.001): ") or 0.001)
-    batch_size = int(input("Enter the batch size (default: 32): ") or 32)
-    epochs = int(input("Enter the number of epochs (default: 20): ") or 20)
+    # Count the number of classes
     classes = len(os.listdir(f"{data_dir}/train"))
 
     # Create JSON configuration
@@ -28,10 +37,10 @@ def create_default_json_config(dataset_name, data_dir, image_path):
             "name": dataset_name,
             "type": "custom",
             "in_channels": in_channels,
-            "num_classes": classes,  # Update if class labels are available
-            "input_size": [height, width],  # Height x Width
-            "mean": [0.5] * in_channels,  # Default mean
-            "std": [0.5] * in_channels,  # Default std
+            "num_classes": classes,
+            "input_size": [height, width],
+            "mean": [0.5] * in_channels,
+            "std": [0.5] * in_channels,
             "train_dir": os.path.join(data_dir, "train"),
             "test_dir": os.path.join(data_dir, "test"),
             "image_type": "grayscale" if in_channels == 1 else "rgb"
@@ -71,13 +80,6 @@ def create_default_json_config(dataset_name, data_dir, image_path):
                     "min_cluster_confidence": 0.7
                 }
             }
-        },
-        "multiscale": {
-            "enabled": False,  # Default: Disabled
-            "method": "wavelet",  # Options: "wavelet", "laplacian", "gaussian"
-            "levels": 3,  # Number of decomposition levels
-            "normalize_per_scale": True,  # Normalize each scale independently
-            "resize_to_input": True  # Resize decomposed image to match input dimensions
         },
         "training": {
             "batch_size": batch_size,
@@ -302,7 +304,22 @@ def main():
                 dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
                 data_dir = extract_and_organize(url, dataset_name, is_url=True)
                 first_image = find_first_image(data_dir)
-                config = check_and_fix_json(os.path.join(data_dir, f"{dataset_name}.json"), dataset_name, data_dir, first_image)
+
+                # Collect user inputs for training parameters
+                latent_dim = int(input("Enter the latent space dimension (default: 128): ") or 128)
+                embedding_dim = int(input("Enter the embedding dimension (default: 64): ") or 64)
+                learning_rate = float(input("Enter the learning rate (default: 0.001): ") or 0.001)
+                batch_size = int(input("Enter the batch size (default: 32): ") or 32)
+                epochs = int(input("Enter the number of epochs (default: 20): ") or 20)
+
+                # Create or update JSON configuration
+                json_path = os.path.join(data_dir, f"{dataset_name}.json")
+                if os.path.exists(json_path):
+                    # If JSON file exists, validate and update it
+                    config = check_and_fix_json(json_path, dataset_name, data_dir, first_image)
+                else:
+                    # If JSON file does not exist, create a new one with user-provided values
+                    config = create_default_json_config(dataset_name, data_dir, first_image, latent_dim, embedding_dim, learning_rate, batch_size, epochs)
             elif data_source == "3":
                 source_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter the path to the local file/folder: {Style.RESET_ALL}")
                 dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
@@ -312,14 +329,21 @@ def main():
                     data_dir = source_path
                 first_image = find_first_image(data_dir)
 
-                # Check if JSON file exists
+                # Collect user inputs for training parameters
+                latent_dim = int(input("Enter the latent space dimension (default: 128): ") or 128)
+                embedding_dim = int(input("Enter the embedding dimension (default: 64): ") or 64)
+                learning_rate = float(input("Enter the learning rate (default: 0.001): ") or 0.001)
+                batch_size = int(input("Enter the batch size (default: 32): ") or 32)
+                epochs = int(input("Enter the number of epochs (default: 20): ") or 20)
+
+                # Create or update JSON configuration
                 json_path = os.path.join(data_dir, f"{dataset_name}.json")
                 if os.path.exists(json_path):
-                    print(f" JSON file:{json_path} exists, we shall validate and update it")
+                    # If JSON file exists, validate and update it
                     config = check_and_fix_json(json_path, dataset_name, data_dir, first_image)
                 else:
-                    # If JSON file does not exist, create a new one
-                    config = create_default_json_config(dataset_name, data_dir, first_image)
+                    # If JSON file does not exist, create a new one with user-provided values
+                    config = create_default_json_config(dataset_name, data_dir, first_image, latent_dim, embedding_dim, learning_rate, batch_size, epochs)
             else:
                 print(f"{Style.BRIGHT}{Fore.RED}Invalid choice. Exiting...{Style.RESET_ALL}")
                 return
