@@ -6,60 +6,13 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from autoencoder.model import Autoencoder, ModifiedAutoencoder
-from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv, save_checkpoint, update_progress, display_confusion_matrix
+from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv, save_checkpoint, update_progress, display_confusion_matrix,ssim_loss
 from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv, save_batch_latents, display_header,update_confusion_matrix
 from datetime import datetime
 from tqdm import tqdm
 from colorama import init, Fore, Back, Style
 
-def train_model(config):
-    """Train the autoencoder model with boxed progress display and confusion matrix."""
-
-    # Get terminal size and setup display areas
-    terminal_size = os.get_terminal_size()
-    terminal_height = terminal_size.lines
-
-    # Display header once at the top
-    print("\033[2J\033[H")  # Clear screen
-    display_header()
-
-    # Calculate progress display position
-    header_height = 12  # Adjust based on your header size
-    progress_start = header_height + 2
-
-    # Initial setup
-    device = get_device()
-    dataset_config = config["dataset"]
-    train_dataset = load_local_dataset(dataset_config["name"])
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=config["training"]["batch_size"],
-        shuffle=True,
-        num_workers=config["training"]["num_workers"]
-    )
-
-    # Model setup
-    model = ModifiedAutoencoder(config).to(device)
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=config["model"]["learning_rate"],
-        weight_decay=config["model"]["optimizer"]["weight_decay"],
-        betas=(config["model"]["optimizer"]["beta1"], config["model"]["optimizer"]["beta2"]),
-        eps=config["model"]["optimizer"]["epsilon"]
-    )
-    criterion_recon = nn.MSELoss()
-
-    # Training loop setup
-    epochs = config["training"]["epochs"]
-    patience = config["training"]["early_stopping"]["patience"]
-    patience_counter = 0
-    best_loss = float("inf")
-
-    # Initialize confusion matrix
-    num_classes = len(train_dataset.classes)
-    confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.float32)
-
-    def draw_progress_box(epoch, batch, total_batches, loss, avg_loss):
+def draw_progress_box(epoch, batch, total_batches, loss, avg_loss):
         """Draw a green box around progress information."""
         # Move cursor to progress area
         print(f"\033[{progress_start}H")
@@ -98,34 +51,118 @@ def train_model(config):
         # Draw bottom border
         print(f"{Fore.GREEN}{bottom_left}{horizontal * width}{bottom_right}{Style.RESET_ALL}")
 
+def train_model(config):
+    """Train the autoencoder model with configurable loss functions."""
+    # Check if config is None
+    if config is None:
+        raise ValueError("Config is None. Please provide a valid configuration dictionary.")
+
+    # Print config for debugging
+    print("Config:", config)
+
+    # Get terminal size and setup display areas
+    terminal_size = os.get_terminal_size()
+    terminal_height = terminal_size.lines
+
+    # Display header once at the top
+    print("\033[2J\033[H")  # Clear screen
+    display_header()
+
+    # Calculate progress display position
+    header_height = 12  # Adjust based on your header size
+    progress_start = header_height + 2
+
+    # Initial setup
+    device = get_device()
+
+    # Ensure dataset config exists
+    if "dataset" not in config:
+        raise ValueError("Config is missing 'dataset' key. Please provide a valid dataset configuration.")
+
+    dataset_config = config["dataset"]
+    train_dataset = load_local_dataset(dataset_config["name"])
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=config["training"]["batch_size"],
+        shuffle=True,
+        num_workers=config["training"]["num_workers"]
+    )
+
+    # Model setup
+    model = ModifiedAutoencoder(config).to(device)
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config["model"]["learning_rate"],
+        weight_decay=config["model"]["optimizer"]["weight_decay"],
+        betas=(config["model"]["optimizer"]["beta1"], config["model"]["optimizer"]["beta2"]),
+        eps=config["model"]["optimizer"]["epsilon"]
+    )
+
+    # Loss functions setup
+    loss_functions = config["training"]["loss_functions"]
+    mse_enabled = loss_functions.get("mse", {}).get("enabled", False)
+    ssim_enabled = loss_functions.get("ssim", {}).get("enabled", False)
+
+    if mse_enabled:
+        mse_weight = loss_functions["mse"].get("weight", 1.0)
+        criterion_mse = nn.MSELoss()
+
+    if ssim_enabled:
+        ssim_weight = loss_functions["ssim"].get("weight", 1.0)
+
+    # Training loop setup
+    epochs = config["training"]["epochs"]
+    patience = config["training"]["early_stopping"]["patience"]
+    patience_counter = 0
+    best_loss = float("inf")
+
+    # Initialize confusion matrix (not used in this version)
+    num_classes = len(train_dataset.classes)
+    confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.float32)
+
     # Training loop
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
         num_batches = len(train_loader)
-        display_header()
+
         for batch_idx, (images, labels) in enumerate(train_loader):
             images = images.to(device)
-            model=model.to(device)
-            reconstructed, _ = model(images)
-            loss = criterion_recon(reconstructed, images)
+            model = model.to(device)
 
+            # Forward pass: Get reconstructed images
+            reconstructed, _ = model(images)
+
+            # Compute loss based on enabled loss functions
+            loss = 0.0
+
+            if mse_enabled:
+                mse_loss = criterion_mse(reconstructed, images)
+                loss += mse_weight * mse_loss
+
+            if ssim_enabled:
+                ssim_loss_value = ssim_loss(images, reconstructed)
+                loss += ssim_weight * ssim_loss_value
+
+            # Backward pass and optimization
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
+            # Update epoch loss
             epoch_loss += loss.item()
             avg_loss = epoch_loss / (batch_idx + 1)
 
-            # Update confusion matrix
-            update_confusion_matrix(images, reconstructed, labels, confusion_matrix)
+            # Update similarity metrics (per class)
+            class_metrics, num_groups = update_confusion_matrix(images, reconstructed, labels, confusion_matrix, screen_group=0)
 
-            # Update progress display with box and confusion matrix
-            draw_progress_box(epoch, batch_idx + 1, num_batches, loss.item(), avg_loss)
+            # Update progress display with box
+            draw_progress_box(epoch, batch_idx + 1, num_batches, loss.item(), avg_loss, progress_start=14)
 
         # End of epoch processing
         avg_epoch_loss = epoch_loss / num_batches
 
+        # Early stopping check
         if avg_epoch_loss < best_loss:
             best_loss = avg_epoch_loss
             patience_counter = 0

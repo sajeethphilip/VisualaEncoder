@@ -55,6 +55,34 @@ from torchvision import transforms
 from PIL import Image
 from autoencoder.model import ModifiedAutoencoder
 from colorama import init, Fore, Back, Style
+from skimage.metrics import structural_similarity as ssim
+import numpy as np
+
+
+def ssim_loss(original, reconstructed):
+    """
+    Compute the SSIM loss between original and reconstructed images.
+    """
+    # Convert tensors to numpy arrays
+    original_np = original.cpu().numpy()
+    reconstructed_np = reconstructed.cpu().numpy()
+
+    # Compute SSIM for each image in the batch
+    ssim_values = []
+    for i in range(original_np.shape[0]):
+        ssim_value = ssim(
+            original_np[i], reconstructed_np[i],
+            win_size=7,  # Adjust window size as needed
+            channel_axis=0 if original_np.shape[1] == 1 else 1,  # Handle grayscale and RGB
+            data_range=1.0  # Assuming images are normalized to [0, 1]
+        )
+        ssim_values.append(ssim_value)
+
+    # Convert SSIM values to a tensor
+    ssim_tensor = torch.tensor(ssim_values, device=original.device)
+
+    # SSIM loss: 1 - SSIM (since SSIM ranges from -1 to 1, with 1 being perfect similarity)
+    return 1 - ssim_tensor.mean()
 def verify_latent_saving(dataset_name, class_folders):
     """Verify that latent space CSV files are properly saved."""
     base_dir = f"data/{dataset_name}/latent_space/train"
@@ -933,8 +961,17 @@ def setup_dataset(dataset_name):
                 "early_stopping": {
                     "patience": 5,
                     "min_delta": 0.001
-                }
-            },
+                },
+                "loss_functions": {
+                    "mse": {
+                        "enabled": true,
+                        "weight": 1.0
+                    },
+                    "ssim": {
+                        "enabled": true,
+                        "weight": 0.5
+                    }
+                },
             "augmentation": {
                 "enabled": False,
                 "random_crop": {
