@@ -81,62 +81,102 @@ import io
 from PIL import Image
 from colorama import init, Fore, Back, Style
 
-def update_confusion_matrix(original, reconstructed, labels, confusion_matrix):
+def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, screen_group=0):
     """
     Update the confusion matrix based on the similarity between original and reconstructed images.
+    Compute similarity metrics (MSE, PSNR, SSIM) for each class and display them in groups that fit the screen.
 
     Args:
         original: Original images tensor (B, C, H, W)
         reconstructed: Reconstructed images tensor (B, C, H, W)
-        labels: True class labels tensor (B) - Not used in this version
+        labels: True class labels tensor (B)
         confusion_matrix: Running confusion matrix tensor (num_classes, num_classes) - Not used in this version
+        screen_group: The current group of classes to display (0 for the first group, 1 for the next, etc.)
 
     Returns:
-        Dictionary containing similarity metrics for the batch
+        Dictionary containing similarity metrics for each class
     """
     with torch.no_grad():
         # Ensure all tensors are on the same device
         device = original.device
         original = original.to(device)
         reconstructed = reconstructed.to(device)
+        labels = labels.to(device)
 
-        # Compute Mean Squared Error (MSE)
-        mse = torch.mean((original - reconstructed) ** 2, dim=(1, 2, 3)).mean()  # Keep as tensor
-
-        # Compute Peak Signal-to-Noise Ratio (PSNR)
-        max_pixel = 1.0  # Assuming images are normalized to [0, 1]
-        psnr = 20 * torch.log10(max_pixel / torch.sqrt(mse)).item()  # Now mse is a tensor
-
-        # Compute Structural Similarity Index (SSIM)
-        from skimage.metrics import structural_similarity as ssim
-        original_np = original.cpu().numpy()
-        reconstructed_np = reconstructed.cpu().numpy()
-
-        # Determine the window size for SSIM
-        min_side = min(original_np.shape[2], original_np.shape[3])  # Minimum of height and width
-        win_size = min(7, min_side)  # Ensure win_size is <= smallest side of the image
-        if win_size % 2 == 0:  # Ensure win_size is odd
-            win_size -= 1
-
-        # Compute SSIM
-        ssim_value = ssim(
-            original_np, reconstructed_np,
-            win_size=win_size,  # Use adjusted window size
-            channel_axis=1,  # Set channel_axis for multichannel images (C is at axis 1 in PyTorch tensors)
-            data_range=max_pixel
-        )
-
-        # Print metrics in a fixed position (e.g., below the progress box)
-        print(f"\033[30;0H\033[K")  # Move to line 20, column 0 and clear the line
-        print(f"Mean Squared Error (MSE): {mse.item():.6f}")  # Convert to float for display
-        print(f"Peak Signal-to-Noise Ratio (PSNR): {psnr:.2f} dB")
-        print(f"Structural Similarity Index (SSIM): {ssim_value:.4f}")
-
-        return {
-            "MSE": mse.item(),  # Convert to float for return
-            "PSNR": psnr,
-            "SSIM": ssim_value
+        # Initialize dictionaries to store metrics per class
+        class_metrics = {
+            "MSE": {},
+            "PSNR": {},
+            "SSIM": {}
         }
+
+        # Get unique classes in the batch
+        unique_classes = torch.unique(labels)
+
+        # Compute metrics for each class
+        for class_id in unique_classes:
+            # Mask for the current class
+            class_mask = (labels == class_id)
+            class_original = original[class_mask]
+            class_reconstructed = reconstructed[class_mask]
+
+            # Skip if no images belong to this class in the batch
+            if class_original.shape[0] == 0:
+                continue
+
+            # Compute Mean Squared Error (MSE) for the class
+            mse = torch.mean((class_original - class_reconstructed) ** 2, dim=(1, 2, 3)).mean()
+
+            # Compute Peak Signal-to-Noise Ratio (PSNR) for the class
+            max_pixel = 1.0  # Assuming images are normalized to [0, 1]
+            psnr = 20 * torch.log10(max_pixel / torch.sqrt(mse)).item()
+
+            # Compute Structural Similarity Index (SSIM) for the class
+            from skimage.metrics import structural_similarity as ssim
+            original_np = class_original.cpu().numpy()
+            reconstructed_np = class_reconstructed.cpu().numpy()
+
+            # Determine the window size for SSIM
+            min_side = min(original_np.shape[2], original_np.shape[3])  # Minimum of height and width
+            win_size = min(7, min_side)  # Ensure win_size is <= smallest side of the image
+            if win_size % 2 == 0:  # Ensure win_size is odd
+                win_size -= 1
+
+            # Compute SSIM for the class
+            ssim_value = ssim(
+                original_np, reconstructed_np,
+                win_size=win_size,  # Use adjusted window size
+                channel_axis=1,  # Set channel_axis for multichannel images (C is at axis 1 in PyTorch tensors)
+                data_range=max_pixel
+            )
+
+            # Store metrics for the class
+            class_metrics["MSE"][class_id.item()] = mse.item()
+            class_metrics["PSNR"][class_id.item()] = psnr
+            class_metrics["SSIM"][class_id.item()] = ssim_value
+
+        # Determine how many classes can fit on the screen
+        screen_height = os.get_terminal_size().lines
+        classes_per_screen = (screen_height - 20) // 4  # 4 rows per class (label + 3 metrics)
+        classes_per_screen = max(1, classes_per_screen)  # Ensure at least 1 class per screen
+
+        # Split the classes into groups
+        unique_classes = sorted(unique_classes.tolist())
+        class_groups = [unique_classes[i:i + classes_per_screen] for i in range(0, len(unique_classes), classes_per_screen)]
+
+        # Display the current group of classes
+        current_group = screen_group % len(class_groups)
+        print(f"\033[20;10H\033[K")  # Move to row 20, column 10 and clear the line
+        print(f"\033[20;10HPer-Class Similarity Metrics (Group {current_group + 1}/{len(class_groups)}):")
+        row = 21  # Start printing metrics from row 21
+        for class_id in class_groups[current_group]:
+            print(f"\033[{row};10HClass {class_id}:")
+            print(f"\033[{row + 1};10H  MSE: {class_metrics['MSE'].get(class_id, 'N/A'):.6f}")
+            print(f"\033[{row + 2};10H  PSNR: {class_metrics['PSNR'].get(class_id, 'N/A'):.2f} dB")
+            print(f"\033[{row + 3};10H  SSIM: {class_metrics['SSIM'].get(class_id, 'N/A'):.4f}")
+            row += 4  # Move to the next class's position
+
+        return class_metrics, len(class_groups)
 
 
 
