@@ -75,7 +75,7 @@ def preprocess_hdr_image(image, config):
         Preprocessed image (PyTorch tensor).
     """
     # Debug: Input image
-    print(f"Input image shape: {image.shape}, dtype: {image.dtype}")
+    #print(f"Input image shape: {image.shape}, dtype: {image.dtype}")
 
     original_shape = image.shape
 
@@ -84,9 +84,9 @@ def preprocess_hdr_image(image, config):
         coeffs = pywt.wavedec2(image, wavelet='db1', level=config["multiscale"]["levels"])
 
         # Debug: Coefficients structure
-        print(f"Coefficients structure: {[type(c) for c in coeffs]}")
-        print(f"Approximation coefficients shape: {coeffs[0].shape}")
-        print(f"Detail coefficients shapes: {[c[0].shape for c in coeffs[1:]]}")
+        #print(f"Coefficients structure: {[type(c) for c in coeffs]}")
+        #print(f"Approximation coefficients shape: {coeffs[0].shape}")
+        #print(f"Detail coefficients shapes: {[c[0].shape for c in coeffs[1:]]}")
 
         # Normalize each scale independently if enabled
         if config["multiscale"]["normalize_per_scale"]:
@@ -99,14 +99,14 @@ def preprocess_hdr_image(image, config):
             coeffs = new_coeffs
 
         # Debug: Coefficients before reconstruction
-        print(f"Coefficients passed to waverec2: {[type(c) for c in coeffs]}")
+        #print(f"Coefficients passed to waverec2: {[type(c) for c in coeffs]}")
 
         # Reconstruct the image from the decomposed scales
         try:
             reconstructed = pywt.waverec2(coeffs, wavelet='db1')
-            print(f"Reconstructed image shape: {reconstructed.shape}")
+            #print(f"Reconstructed image shape: {reconstructed.shape}")
         except ValueError as e:
-            print(f"Error during wavelet reconstruction: {e}")
+            #print(f"Error during wavelet reconstruction: {e}")
             # Fallback to original image if reconstruction fails
             reconstructed = image
 
@@ -128,7 +128,7 @@ def preprocess_hdr_image(image, config):
         image_tensor = image_tensor.repeat(3, 1, 1)
 
     # Debug: Preprocessed tensor
-    print(f"Preprocessed tensor shape: {image_tensor.shape}")
+    #print(f"Preprocessed tensor shape: {image_tensor.shape}")
 
     return image_tensor
 
