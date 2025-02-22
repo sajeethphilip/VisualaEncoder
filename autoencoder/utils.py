@@ -74,16 +74,27 @@ def preprocess_hdr_image(image, config):
     Returns:
         Preprocessed image (PyTorch tensor).
     """
+    # Debug: Input image
+    print(f"Input image shape: {image.shape}, dtype: {image.dtype}")
+
     original_shape = image.shape
 
     if config["multiscale"]["enabled"]:
         # Decompose the image into multiple scales
         coeffs = pywt.wavedec2(image, wavelet='db1', level=config["multiscale"]["levels"])
 
+        # Debug: Coefficients structure
+        print(f"Coefficients structure: {[type(c) for c in coeffs]}")
+        print(f"Approximation coefficients shape: {coeffs[0].shape}")
+        print(f"Detail coefficients shapes: {[c[0].shape for c in coeffs[1:]]}")
+
         # Normalize each scale independently if enabled
         if config["multiscale"]["normalize_per_scale"]:
             # Apply thresholding to detail coefficients only
             coeffs = [coeffs[0]] + [pywt.threshold(c, value=np.percentile(c, 99), mode="soft") for c in coeffs[1:]]
+
+        # Debug: Coefficients before reconstruction
+        print(f"Coefficients passed to waverec2: {[type(c) for c in coeffs]}")
 
         # Reconstruct the image from the decomposed scales
         try:
@@ -106,6 +117,9 @@ def preprocess_hdr_image(image, config):
     if image_tensor.shape[0] != 3:
         # If the image is grayscale, repeat the single channel to create 3 channels
         image_tensor = image_tensor.repeat(3, 1, 1)
+
+    # Debug: Preprocessed tensor
+    print(f"Preprocessed tensor shape: {image_tensor.shape}")
 
     return image_tensor
 
