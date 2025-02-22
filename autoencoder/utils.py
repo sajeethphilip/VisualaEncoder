@@ -1030,7 +1030,13 @@ def save_latent_space_for_epoch(model, data_loader, device, dataset_name):
 
             # Store latent space representations and image paths
             latent_space.append(latent.cpu())  # Move to CPU
-            image_paths.extend(data_loader.dataset.samples)  # Get paths of the images
+
+            # Extract image paths from the dataset
+            if hasattr(data_loader.dataset, 'samples'):
+                # If samples is a list of tuples (image_path, label), extract only the paths
+                image_paths.extend([sample[0] for sample in data_loader.dataset.samples])
+            else:
+                raise ValueError("DataLoader dataset does not have a 'samples' attribute.")
 
     # Concatenate all batches
     latent_space = torch.cat(latent_space, dim=0)
@@ -1258,7 +1264,7 @@ def save_latent_space(latent_space, image_paths, dataset_name, frequencies):
 
     Args:
         latent_space: Tensor containing latent space representations.
-        image_paths: List of paths to the original images.
+        image_paths: List of paths to the original images (strings).
         dataset_name: Name of the dataset.
         frequencies: Tensor containing the frequencies used for mapping.
     """
@@ -1266,6 +1272,10 @@ def save_latent_space(latent_space, image_paths, dataset_name, frequencies):
     os.makedirs(base_latent_dir, exist_ok=True)
 
     for latent, image_path in zip(latent_space, image_paths):
+        # Ensure image_path is a string
+        if not isinstance(image_path, str):
+            raise TypeError(f"Expected image_path to be a string, but got {type(image_path)}")
+
         # Get the relative path from the dataset directory to maintain hierarchy
         rel_path = os.path.relpath(os.path.dirname(image_path), f"data/{dataset_name}/train")
         target_dir = os.path.join(base_latent_dir, rel_path)
