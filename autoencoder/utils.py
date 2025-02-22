@@ -166,7 +166,7 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, s
         # Determine how many classes can fit on the screen
         screen_height = os.get_terminal_size().lines
         screen_width = os.get_terminal_size().columns
-        classes_per_screen = (screen_height - 16) // 4  # 4 rows per class (label + 3 metrics)
+        classes_per_screen = (screen_height - 20) // 4  # 4 rows per class (label + 3 metrics)
         classes_per_screen = max(1, classes_per_screen)  # Ensure at least 1 class per screen
 
         # Split the classes into groups
@@ -176,9 +176,9 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, s
         # Display the current group of classes
         current_group = screen_group % len(class_groups)
         start_col = screen_width // 2  # Start displaying metrics in the later half of the screen
-        print(f"\033[16;{start_col}H\033[K")  # Move to row 16, start_col and clear the line
-        print(f"\033[16;{start_col}HPer-Class Similarity Metrics (Group {current_group + 1}/{len(class_groups)}):")
-        row = 17 # Start printing metrics from row 17
+        print(f"\033[20;{start_col}H\033[K")  # Move to row 20, start_col and clear the line
+        print(f"\033[20;{start_col}HPer-Class Similarity Metrics (Group {current_group + 1}/{len(class_groups)}):")
+        row = 21  # Start printing metrics from row 21
         for class_id in class_groups[current_group]:
             print(f"\033[{row};{start_col}HClass {class_id}:")
             print(f"\033[{row + 1};{start_col}H  MSE: {class_metrics['MSE'].get(class_id, 'N/A'):.6f}")
