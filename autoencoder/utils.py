@@ -59,6 +59,11 @@ from skimage.metrics import structural_similarity as ssim
 import numpy as np
 from skimage.transform import resize
 
+import pywt
+import numpy as np
+from skimage.transform import resize
+from torchvision import transforms
+
 def preprocess_hdr_image(image, config):
     """
     Preprocess an HDR image with optional multiscale decomposition.
@@ -78,7 +83,8 @@ def preprocess_hdr_image(image, config):
 
         # Normalize each scale independently if enabled
         if config["multiscale"]["normalize_per_scale"]:
-            coeffs = [pywt.threshold(c, value=np.percentile(c, 99), mode="soft") for c in coeffs]
+            # Apply thresholding to detail coefficients only
+            coeffs = [coeffs[0]] + [pywt.threshold(c, value=np.percentile(c, 99), mode="soft") for c in coeffs[1:]]
 
         # Reconstruct the image from the decomposed scales
         try:
