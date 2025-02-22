@@ -45,6 +45,14 @@ def create_default_json_config(dataset_name, data_dir, image_path, latent_dim=12
             "test_dir": os.path.join(data_dir, "test"),
             "image_type": "grayscale" if in_channels == 1 else "rgb"
         },
+            "multiscale": {
+            "enabled": False,
+            "method": "wavelet",
+            "levels": 3,
+            "normalize_per_scale": True,
+            "resize_to_input": True
+            },
+
         "model": {
             "encoder_type": "autoenc",
             "feature_dims": latent_dim,
