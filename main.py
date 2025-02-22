@@ -315,7 +315,7 @@ def main():
                 # Check if JSON file exists
                 json_path = os.path.join(data_dir, f"{dataset_name}.json")
                 if os.path.exists(json_path):
-                    # If JSON file exists, validate and update it
+                    print(f" JSON file:{json_path} exists, we shall validate and update it")
                     config = check_and_fix_json(json_path, dataset_name, data_dir, first_image)
                 else:
                     # If JSON file does not exist, create a new one
