@@ -84,7 +84,7 @@ from colorama import init, Fore, Back, Style
 def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, screen_group=0):
     """
     Update the confusion matrix based on the similarity between original and reconstructed images.
-    Compute similarity metrics (MSE, PSNR, SSIM) for each class and display them in a 10-column grid.
+    Compute similarity metrics (MSE, PSNR, SSIM) for each class and display them in a grid starting at row 15 and column (screen_width // 2 - 20).
 
     Args:
         original: Original images tensor (B, C, H, W)
@@ -167,15 +167,18 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, s
         screen_height = os.get_terminal_size().lines
         screen_width = os.get_terminal_size().columns
 
-        # Calculate the number of columns (10 columns, but ensure they fit within the left half of the screen)
-        num_columns = 10
-        column_width = (screen_width // 2) // num_columns  # Width of each column
-        start_col = 10  # Start displaying metrics at column 10
-        end_col = start_col + (num_columns * column_width)  # End column
+        # Calculate the starting column (middle of the screen minus 20 columns)
+        start_col = max(0, (screen_width // 2) - 20)  # Ensure start_col is not negative
+        end_col = screen_width  # Use the full screen width for display
 
-        # Determine how many classes can fit on the screen
-        classes_per_screen = (screen_height - 15) * num_columns  # 10 columns, starting from row 15
-        classes_per_screen = max(1, classes_per_screen)  # Ensure at least 1 class per screen
+        # Determine how many classes can fit per row
+        class_block_width = 20  # Width of each class block (MSE, PSNR, SSIM)
+        num_columns = (end_col - start_col) // class_block_width  # Number of columns per row
+        num_columns = max(1, num_columns)  # Ensure at least 1 column
+
+        # Determine how many rows can fit on the screen
+        rows_per_screen = screen_height - 15  # Start from row 15
+        classes_per_screen = rows_per_screen * num_columns  # Total classes per screen
 
         # Split the classes into groups
         unique_classes = sorted(unique_classes.tolist())
@@ -196,8 +199,8 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, s
             print(f"\033[{row + 3};{col}H  SSIM: {class_metrics['SSIM'].get(class_id, 'N/A'):.4f}")
 
             # Move to the next column
-            col += column_width
-            if col >= end_col:  # Move to the next row if the current row is full
+            col += class_block_width
+            if col + class_block_width > end_col:  # Move to the next row if the current row is full
                 col = start_col
                 row += 4
 
