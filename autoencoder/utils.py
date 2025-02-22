@@ -142,8 +142,8 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, s
             if win_size % 2 == 0:  # Ensure win_size is odd
                 win_size -= 1
 
-            # Skip SSIM computation if the images are too small
-            if win_size < 3:  # Minimum win_size for SSIM is 3
+            # Skip SSIM computation if the images are too small or have no variation
+            if win_size < 3 or torch.allclose(class_original, class_reconstructed, atol=1e-5):
                 ssim_value = float('nan')  # Use NaN if SSIM cannot be computed
             else:
                 # Compute SSIM for the class
@@ -165,7 +165,8 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, s
 
         # Determine how many classes can fit on the screen
         screen_height = os.get_terminal_size().lines
-        classes_per_screen = (screen_height - 20) // 4  # 4 rows per class (label + 3 metrics)
+        screen_width = os.get_terminal_size().columns
+        classes_per_screen = (screen_height - 16) // 4  # 4 rows per class (label + 3 metrics)
         classes_per_screen = max(1, classes_per_screen)  # Ensure at least 1 class per screen
 
         # Split the classes into groups
@@ -174,14 +175,15 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, s
 
         # Display the current group of classes
         current_group = screen_group % len(class_groups)
-        print(f"\033[20;10H\033[K")  # Move to row 20, column 10 and clear the line
-        print(f"\033[20;10HPer-Class Similarity Metrics (Group {current_group + 1}/{len(class_groups)}):")
-        row = 21  # Start printing metrics from row 21
+        start_col = screen_width // 2  # Start displaying metrics in the later half of the screen
+        print(f"\033[16;{start_col}H\033[K")  # Move to row 16, start_col and clear the line
+        print(f"\033[16;{start_col}HPer-Class Similarity Metrics (Group {current_group + 1}/{len(class_groups)}):")
+        row = 17 # Start printing metrics from row 17
         for class_id in class_groups[current_group]:
-            print(f"\033[{row};10HClass {class_id}:")
-            print(f"\033[{row + 1};10H  MSE: {class_metrics['MSE'].get(class_id, 'N/A'):.6f}")
-            print(f"\033[{row + 2};10H  PSNR: {class_metrics['PSNR'].get(class_id, 'N/A'):.2f} dB")
-            print(f"\033[{row + 3};10H  SSIM: {class_metrics['SSIM'].get(class_id, 'N/A'):.4f}")
+            print(f"\033[{row};{start_col}HClass {class_id}:")
+            print(f"\033[{row + 1};{start_col}H  MSE: {class_metrics['MSE'].get(class_id, 'N/A'):.6f}")
+            print(f"\033[{row + 2};{start_col}H  PSNR: {class_metrics['PSNR'].get(class_id, 'N/A'):.2f} dB")
+            print(f"\033[{row + 3};{start_col}H  SSIM: {class_metrics['SSIM'].get(class_id, 'N/A'):.4f}")
             row += 4  # Move to the next class's position
 
         return class_metrics, len(class_groups)
