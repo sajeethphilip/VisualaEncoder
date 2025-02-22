@@ -104,6 +104,7 @@ def preprocess_hdr_image(image, config):
         # Reconstruct the image from the decomposed scales
         try:
             reconstructed = pywt.waverec2(coeffs, wavelet='db1')
+            print(f"Reconstructed image shape: {reconstructed.shape}")
         except ValueError as e:
             print(f"Error during wavelet reconstruction: {e}")
             # Fallback to original image if reconstruction fails
@@ -116,7 +117,10 @@ def preprocess_hdr_image(image, config):
         image = reconstructed
 
     # Convert to PyTorch tensor
-    image_tensor = transforms.ToTensor()(image)
+    if isinstance(image, np.ndarray):
+        image_tensor = torch.from_numpy(image).float()  # Convert to float tensor
+    else:
+        image_tensor = transforms.ToTensor()(image)  # Fallback to ToTensor for PIL images
 
     # Ensure the tensor has 3 channels (RGB)
     if image_tensor.shape[0] != 3:
