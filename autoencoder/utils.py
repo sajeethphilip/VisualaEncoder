@@ -1034,6 +1034,38 @@ def setup_dataset(dataset_name):
         logging.error(f"Error setting up dataset: {str(e)}")
         return None
 
+def save_latent_space_for_epoch(model, data_loader, device, dataset_name):
+    """
+    Save latent space representations for all images in the dataset at the end of an epoch.
+
+    Args:
+        model: The trained autoencoder model.
+        data_loader: DataLoader for the dataset.
+        device: The device (CPU/GPU) where computations are performed.
+        dataset_name: Name of the dataset.
+    """
+    model.eval()  # Set the model to evaluation mode
+    latent_space = []
+    image_paths = []
+
+    with torch.no_grad():
+        for batch in data_loader:
+            images, labels = batch
+            images = images.to(device)
+
+            # Forward pass: Get latent space representations
+            _, latent = model(images)
+
+            # Store latent space representations and image paths
+            latent_space.append(latent.cpu())
+            image_paths.extend(data_loader.dataset.samples)  # Get paths of the images
+
+    # Concatenate all batches
+    latent_space = torch.cat(latent_space, dim=0)
+
+    # Save latent space representations
+    save_latent_space(latent_space, image_paths, dataset_name)
+
 def get_augmentation_transform(config):
     """Create a data augmentation transform based on the configuration."""
     augmentation_config = config["augmentation"]
@@ -1244,17 +1276,31 @@ def create_json_config(data_dir):
 
 #-------------------------------
 
-def save_latent_space(latent, dataset_name, filename="latent.pkl"):
-    """Save the latent space as a pickle file."""
-    data_dir = f"data/{dataset_name}"
-    os.makedirs(data_dir, exist_ok=True)
+def save_latent_space(latent_space, image_paths, dataset_name):
+    """
+    Save latent space representations as CSV files, retaining the exact basename of the input files.
 
-    # Save as pickle
-    pkl_path = os.path.join(data_dir, filename)
-    with open(pkl_path, "wb") as f:
-        pickle.dump(latent.cpu().numpy(), f)
+    Args:
+        latent_space: Tensor containing latent space representations.
+        image_paths: List of paths to the original images.
+        dataset_name: Name of the dataset.
+    """
+    base_latent_dir = os.path.join("data", dataset_name, "latent_space")
+    os.makedirs(base_latent_dir, exist_ok=True)
 
-    print(f"Latent space saved to {pkl_path}")
+    for latent, image_path in zip(latent_space, image_paths):
+        # Get the relative path from the dataset directory to maintain hierarchy
+        rel_path = os.path.relpath(os.path.dirname(image_path), f"data/{dataset_name}/train")
+        target_dir = os.path.join(base_latent_dir, rel_path)
+        os.makedirs(target_dir, exist_ok=True)
+
+        # Get the filename without extension
+        filename = os.path.splitext(os.path.basename(image_path))[0]
+
+        # Save latent space representation as CSV
+        csv_path = os.path.join(target_dir, f"{filename}.csv")
+        latent_values = latent.numpy().flatten()
+        np.savetxt(csv_path, latent_values, delimiter=",")
 
 def save_embeddings_as_csv(embeddings, dataset_name, filename="embeddings.csv"):
     """Save the embedded tensors as a flattened 1D CSV file."""

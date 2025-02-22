@@ -60,6 +60,7 @@ def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_star
 
     # Draw bottom border
     print(f"{Fore.GREEN}{bottom_left}{horizontal * box_width}{bottom_right}{Style.RESET_ALL}")
+
 def train_model(config):
     """Train the autoencoder model with configurable loss functions."""
     # Check if config is None
@@ -150,7 +151,7 @@ def train_model(config):
             model = model.to(device)
 
             # Forward pass: Get reconstructed images
-            reconstructed, _ = model(images)
+            reconstructed, latent = model(images)
 
             # Compute loss based on enabled loss functions
             loss = 0.0
@@ -181,6 +182,9 @@ def train_model(config):
         # End of epoch processing
         avg_epoch_loss = epoch_loss / num_batches
 
+        # Save latent space representations for all images at the end of each epoch
+        save_latent_space_for_epoch(model, train_loader, device, dataset_config["name"])
+
         # Early stopping check
         if avg_epoch_loss < best_loss:
             best_loss = avg_epoch_loss
@@ -197,7 +201,6 @@ def train_model(config):
     print(f"\033[{progress_start + 20}H\033[K")
     print("Training complete!")
     return model
-
 
 
 def save_final_representations(model, loader, device, dataset_name):
