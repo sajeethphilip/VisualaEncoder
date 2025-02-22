@@ -159,9 +159,19 @@ def train_model(config):
         num_batches = len(train_loader)
 
         for batch_idx, (images, labels) in enumerate(train_loader):
-            images = images.to(device)  # Move images to the correct device
-            labels = labels.to(device)  # Move labels to the correct device
-            model=model.to(device)  # Move model to the correct device
+            # Move images and labels to the correct device
+            images = images.to(device)
+            labels = labels.to(device)
+
+            # Conditional preprocessing based on JSON configuration
+            if config["multiscale"]["enabled"]:
+                # Apply multiscale decomposition
+                images = torch.stack([preprocess_hdr_image(img.cpu().numpy(), config) for img in images])
+                images = images.to(device)  # Move preprocessed images back to the device
+            else:
+                # Apply standard preprocessing (e.g., normalization, resizing)
+                images = images.to(device)  # Ensure images are on the correct device
+
             # Forward pass: Get reconstructed images
             reconstructed, latent = model(images)
 

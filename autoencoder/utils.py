@@ -57,7 +57,87 @@ from autoencoder.model import ModifiedAutoencoder
 from colorama import init, Fore, Back, Style
 from skimage.metrics import structural_similarity as ssim
 import numpy as np
+from skimage.transform import resize
 
+def preprocess_hdr_image(image, config):
+    """
+    Preprocess an HDR image with optional multiscale decomposition.
+
+    Args:
+        image: Input image (2D numpy array).
+        config: Configuration dictionary.
+
+    Returns:
+        Preprocessed image (PyTorch tensor).
+    """
+    original_shape = image.shape
+
+    if config["multiscale"]["enabled"]:
+        # Decompose the image into multiple scales
+        coeffs = multiscale_decompose(image, method=config["multiscale"]["method"], levels=config["multiscale"]["levels"])
+
+        # Normalize each scale independently if enabled
+        if config["multiscale"]["normalize_per_scale"]:
+            coeffs = [pywt.threshold(c, value=np.percentile(c, 99), mode="soft") for c in coeffs]
+
+        # Reconstruct the image from the decomposed scales
+        reconstructed = pywt.waverec2(coeffs, wavelet='db1')
+
+        # Resize to match original dimensions if enabled
+        if config["multiscale"]["resize_to_input"]:
+            reconstructed = resize(reconstructed, original_shape, mode="reflect", anti_aliasing=True)
+
+        image = reconstructed
+
+    # Convert to PyTorch tensor
+    image_tensor = transforms.ToTensor()(image)
+    return image_tensor
+
+def multiscale_decompose(image, method="wavelet", levels=3):
+    """
+    Decompose an HDR image into multiple scales using wavelet transform.
+
+    Args:
+        image: Input image (2D numpy array).
+        method: Decomposition method ("wavelet", "laplacian", "gaussian").
+        levels: Number of decomposition levels.
+
+    Returns:
+        List of decomposed images (coarse to fine).
+    """
+    if method == "wavelet":
+        # Perform wavelet decomposition
+        coeffs = pywt.wavedec2(image, wavelet='db1', level=levels)
+        return coeffs
+    else:
+        raise ValueError(f"Unsupported decomposition method: {method}")
+
+def postprocess_hdr_image(image_tensor, config):
+    """
+    Postprocess an HDR image with optional multiscale reconstruction.
+
+    Args:
+        image_tensor: Reconstructed image (PyTorch tensor).
+        config: Configuration dictionary.
+
+    Returns:
+        Postprocessed image (2D numpy array).
+    """
+    # Convert tensor to numpy array
+    image = image_tensor.squeeze(0).cpu().numpy()
+
+    if config["multiscale"]["enabled"]:
+        # Decompose the reconstructed image
+        coeffs = multiscale_decompose(image, method=config["multiscale"]["method"], levels=config["multiscale"]["levels"])
+
+        # Normalize each scale independently if enabled
+        if config["multiscale"]["normalize_per_scale"]:
+            coeffs = [pywt.threshold(c, value=np.percentile(c, 99), mode="soft") for c in coeffs]
+
+        # Reconstruct the image from the decomposed scales
+        image = pywt.waverec2(coeffs, wavelet='db1')
+
+    return image
 
 def ssim_loss(original, reconstructed):
     """
@@ -897,6 +977,14 @@ def setup_dataset(dataset_name):
                 "image_type": "image",
                 "combined_train_test": combine_data
             },
+              "multiscale": {
+                "enabled": False,  # Enable or disable multiscale decomposition
+                "method": "wavelet",  # Options: "wavelet", "laplacian", "gaussian"
+                "levels": 3,  # Number of decomposition levels
+                "normalize_per_scale": True,  # Normalize each scale independently
+                "resize_to_input": True  # Resize decomposed image to match input dimensions
+              }
+
             "model": {
                 "encoder_type": "autoenc",
                 "feature_dims": 128,
@@ -1013,6 +1101,7 @@ def setup_dataset(dataset_name):
     except Exception as e:
         logging.error(f"Error setting up dataset: {str(e)}")
         return None
+
 
 def save_latent_space_for_epoch(model, data_loader, device, dataset_name):
     """
