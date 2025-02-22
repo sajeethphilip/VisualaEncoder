@@ -326,8 +326,8 @@ def main():
                     json_path = os.path.join(data_dir, f"{dataset_name}.json")
                     with open(json_path, "w") as f:
                         json.dump(config, f, indent=4)
+                    print(f"Created default JSON configuration file at {json_path}")
 
-    print(f"Created default JSON configuration file at {json_path}")
             elif data_source == "3":
                 source_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter the path to the local file/folder: {Style.RESET_ALL}")
                 dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
@@ -356,6 +356,7 @@ def main():
                     json_path = os.path.join(data_dir, f"{dataset_name}.json")
                     with open(json_path, "w") as f:
                         json.dump(config, f, indent=4)
+                    print(f"Created default JSON configuration file at {json_path}")
 
             else:
                 print(f"{Style.BRIGHT}{Fore.RED}Invalid choice. Exiting...{Style.RESET_ALL}")
