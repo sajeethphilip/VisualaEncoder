@@ -964,11 +964,11 @@ def setup_dataset(dataset_name):
                 },
                 "loss_functions": {
                     "mse": {
-                        "enabled": true,
+                        "enabled": True,
                         "weight": 1.0
                     },
                     "ssim": {
-                        "enabled": true,
+                        "enabled": True,
                         "weight": 0.5
                     }
                 },
