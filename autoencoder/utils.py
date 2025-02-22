@@ -142,13 +142,21 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, s
             if win_size % 2 == 0:  # Ensure win_size is odd
                 win_size -= 1
 
-            # Compute SSIM for the class
-            ssim_value = ssim(
-                original_np, reconstructed_np,
-                win_size=win_size,  # Use adjusted window size
-                channel_axis=1,  # Set channel_axis for multichannel images (C is at axis 1 in PyTorch tensors)
-                data_range=max_pixel
-            )
+            # Skip SSIM computation if the images are too small
+            if win_size < 3:  # Minimum win_size for SSIM is 3
+                ssim_value = float('nan')  # Use NaN if SSIM cannot be computed
+            else:
+                # Compute SSIM for the class
+                try:
+                    ssim_value = ssim(
+                        original_np, reconstructed_np,
+                        win_size=win_size,  # Use adjusted window size
+                        channel_axis=1,  # Set channel_axis for multichannel images (C is at axis 1 in PyTorch tensors)
+                        data_range=max_pixel
+                    )
+                except ValueError:
+                    # Fallback to NaN if SSIM computation fails
+                    ssim_value = float('nan')
 
             # Store metrics for the class
             class_metrics["MSE"][class_id.item()] = mse.item()
