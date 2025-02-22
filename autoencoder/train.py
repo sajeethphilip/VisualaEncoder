@@ -12,44 +12,53 @@ from datetime import datetime
 from tqdm import tqdm
 from colorama import init, Fore, Back, Style
 
-def draw_progress_box(epoch, batch, total_batches, loss, avg_loss):
-        """Draw a green box around progress information."""
-        # Move cursor to progress area
-        print(f"\033[{progress_start}H")
+def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_start=14):
+    """
+    Draw a progress box with training metrics at a fixed position on the screen.
 
-        # Box drawing characters
-        top_left = "╔"
-        top_right = "╗"
-        bottom_left = "╚"
-        bottom_right = "╝"
-        horizontal = "═"
-        vertical = "║"
+    Args:
+        epoch: Current epoch number
+        batch: Current batch number
+        total_batches: Total number of batches
+        loss: Current loss value
+        avg_loss: Average loss so far
+        progress_start: Starting row for the progress box
+    """
+    # Box drawing characters
+    top_left = "╔"
+    top_right = "╗"
+    bottom_left = "╚"
+    bottom_right = "╝"
+    horizontal = "═"
+    vertical = "║"
 
-        # Box dimensions
-        width = 60
-        height = 8
+    # Box dimensions
+    box_width = 60
+    box_height = 8
 
-        # Draw top border
-        print(f"{Fore.GREEN}{top_left}{horizontal * width}{top_right}{Style.RESET_ALL}")
+    # Progress bar
+    progress = batch / total_batches
+    bar_width = box_width - 20
+    filled = int(bar_width * progress)
+    bar = "█" * filled + "-" * (bar_width - filled)
 
-        # Progress information
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (width-20)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    # Move cursor to the fixed starting position for the progress box
+    print(f"\033[{progress_start};0H", end="")
 
-        # Progress bar
-        bar_width = width - 20
-        progress = batch / total_batches
-        filled = int(bar_width * progress)
-        bar = "█" * filled + "-" * (bar_width - filled)
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} [{bar}] {progress:.1%} {' ' * 5}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    # Draw top border
+    print(f"{Fore.GREEN}{top_left}{horizontal * box_width}{top_right}{Style.RESET_ALL}")
 
-        # Training metrics
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Batch: {batch}/{total_batches} {' ' * (width-25)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Current Loss: {loss:.6f} {' ' * (width-30)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Average Loss: {avg_loss:.6f} {' ' * (width-30)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-        print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Best Batch Loss: {best_loss:.6f} {' ' * (width-30)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    # Epoch and progress information
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (box_width - 20)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} [{bar}] {progress:.1%} {' ' * 5}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
 
-        # Draw bottom border
-        print(f"{Fore.GREEN}{bottom_left}{horizontal * width}{bottom_right}{Style.RESET_ALL}")
+    # Training metrics
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Batch: {batch}/{total_batches} {' ' * (box_width - 25)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Current Loss: {loss:.6f} {' ' * (box_width - 30)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Average Loss: {avg_loss:.6f} {' ' * (box_width - 30)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+
+    # Draw bottom border
+    print(f"{Fore.GREEN}{bottom_left}{horizontal * box_width}{bottom_right}{Style.RESET_ALL}")
 
 def train_model(config):
     """Train the autoencoder model with configurable loss functions."""
