@@ -58,7 +58,6 @@ from colorama import init, Fore, Back, Style
 from skimage.metrics import structural_similarity as ssim
 import numpy as np
 from skimage.transform import resize
-
 import pywt
 import numpy as np
 from skimage.transform import resize
