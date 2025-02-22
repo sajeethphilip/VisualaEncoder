@@ -91,7 +91,12 @@ def preprocess_hdr_image(image, config):
         # Normalize each scale independently if enabled
         if config["multiscale"]["normalize_per_scale"]:
             # Apply thresholding to detail coefficients only
-            coeffs = [coeffs[0]] + [pywt.threshold(c, value=np.percentile(c, 99), mode="soft") for c in coeffs[1:]]
+            new_coeffs = [coeffs[0]]  # Keep approximation coefficients unchanged
+            for c in coeffs[1:]:
+                # Threshold each detail coefficient (horizontal, vertical, diagonal)
+                new_c = tuple(pywt.threshold(arr, value=np.percentile(arr, 99), mode="soft") for arr in c)
+                new_coeffs.append(new_c)
+            coeffs = new_coeffs
 
         # Debug: Coefficients before reconstruction
         print(f"Coefficients passed to waverec2: {[type(c) for c in coeffs]}")
