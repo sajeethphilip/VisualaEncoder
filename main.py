@@ -6,7 +6,7 @@ from PIL import Image
 from autoencoder.train import train_model
 from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize,find_first_image,reconstruct_image,reconstruct_from_latent,display_header
 
-def create_default_json_config(dataset_name, data_dir, image_path,write=True, latent_dim=128, embedding_dim=64, learning_rate=0.001, batch_size=32, epochs=20):
+def create_default_json_config(dataset_name, data_dir, image_path, latent_dim=128, embedding_dim=64, learning_rate=0.001, batch_size=32, epochs=20):
     """
     Create a default JSON configuration file interactively.
 
@@ -149,12 +149,7 @@ def create_default_json_config(dataset_name, data_dir, image_path,write=True, la
         }
     }
 
-    # Save JSON file
-    json_path = os.path.join(data_dir, f"{dataset_name}.json")
-    with open(json_path, "w") as f:
-        json.dump(config, f, indent=4)
 
-    print(f"Created default JSON configuration file at {json_path}")
     return config
 
 def validate_config(config):
@@ -207,7 +202,7 @@ def check_and_fix_json(json_path, dataset_name, data_dir, image_path):
     }
 
     # Load default configuration for comparison
-    default_config = create_default_json_config(dataset_name, data_dir, image_path,write=False)
+    default_config = create_default_json_config(dataset_name, data_dir, image_path)
 
     try:
         # Try to load existing config
@@ -327,6 +322,12 @@ def main():
                 else:
                     # If JSON file does not exist, create a new one with user-provided values
                     config = create_default_json_config(dataset_name, data_dir, first_image, latent_dim, embedding_dim, learning_rate, batch_size, epochs)
+                    # Save JSON file
+                    json_path = os.path.join(data_dir, f"{dataset_name}.json")
+                    with open(json_path, "w") as f:
+                        json.dump(config, f, indent=4)
+
+    print(f"Created default JSON configuration file at {json_path}")
             elif data_source == "3":
                 source_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter the path to the local file/folder: {Style.RESET_ALL}")
                 dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
@@ -351,6 +352,11 @@ def main():
                 else:
                     # If JSON file does not exist, create a new one with user-provided values
                     config = create_default_json_config(dataset_name, data_dir, first_image, latent_dim, embedding_dim, learning_rate, batch_size, epochs)
+                    # Save JSON file
+                    json_path = os.path.join(data_dir, f"{dataset_name}.json")
+                    with open(json_path, "w") as f:
+                        json.dump(config, f, indent=4)
+
             else:
                 print(f"{Style.BRIGHT}{Fore.RED}Invalid choice. Exiting...{Style.RESET_ALL}")
                 return
