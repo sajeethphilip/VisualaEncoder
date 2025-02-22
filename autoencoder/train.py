@@ -173,6 +173,7 @@ def train_model(config):
                 images = images.to(device)  # Ensure images are on the correct device
 
             # Forward pass: Get reconstructed images
+            model=model.to(device)
             reconstructed, latent = model(images)
 
             # Compute loss based on enabled loss functions
