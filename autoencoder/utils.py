@@ -1029,24 +1029,18 @@ def save_latent_space_for_epoch(model, data_loader, device, dataset_name):
             _, latent = model(images)
 
             # Store latent space representations and image paths
-            latent_space.append(latent.cpu())
-
-            # Extract image paths correctly
-            if hasattr(data_loader.dataset, 'samples'):
-                # If samples is a list of tuples (image_path, label), extract only the paths
-                if isinstance(data_loader.dataset.samples[0], tuple):
-                    image_paths.extend([sample[0] for sample in data_loader.dataset.samples])
-                else:
-                    # If samples is a list of strings (image paths), use it directly
-                    image_paths.extend(data_loader.dataset.samples)
-            else:
-                raise ValueError("DataLoader dataset does not have 'samples' attribute.")
+            latent_space.append(latent.cpu())  # Move to CPU
+            image_paths.extend(data_loader.dataset.samples)  # Get paths of the images
 
     # Concatenate all batches
     latent_space = torch.cat(latent_space, dim=0)
 
+    # Get frequencies from the model's latent mapper
+    frequencies = model.latent_mapper.frequencies
+
     # Save latent space representations
-    save_latent_space(latent_space, image_paths, dataset_name)
+    save_latent_space(latent_space, image_paths, dataset_name, frequencies)
+
 
 def get_augmentation_transform(config):
     """Create a data augmentation transform based on the configuration."""
@@ -1260,7 +1254,7 @@ def create_json_config(data_dir):
 
 def save_latent_space(latent_space, image_paths, dataset_name, frequencies):
     """
-    Save latent space representations in the new CSV format.
+    Save latent space representations as CSV files, retaining the exact basename of the input files.
 
     Args:
         latent_space: Tensor containing latent space representations.
@@ -1285,10 +1279,11 @@ def save_latent_space(latent_space, image_paths, dataset_name, frequencies):
 
         # Convert frequencies and latent values to numpy arrays
         frequencies_np = frequencies.cpu().numpy()
-        latent_values_np = latent.cpu().numpy()
+        latent_values_np = latent.numpy().flatten()
 
         # Save frequencies and latent values in the new format
         np.savetxt(csv_path, [frequencies_np, latent_values_np], delimiter=",")
+
 
 def save_embeddings_as_csv(embeddings, dataset_name, filename="embeddings.csv"):
     """Save the embedded tensors as a flattened 1D CSV file."""
