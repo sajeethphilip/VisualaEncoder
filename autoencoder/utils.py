@@ -747,51 +747,32 @@ def save_checkpoint(model, epoch, loss, config, checkpoint_path):
     torch.save(checkpoint, checkpoint_path)
 
 
-def load_checkpoint(checkpoint_path, model, config):
-    """Load checkpoint with robust frequency handling."""
-    try:
-        # Get device from model's parameters
-        device = next(model.parameters()).device
+def load_checkpoint(checkpoint_path, model, config, device):
+    """
+    Load model checkpoint.
 
+    Args:
+        checkpoint_path: Path to the checkpoint file.
+        model: The model to load the checkpoint into.
+        config: Configuration dictionary.
+        device: The device (CPU, GPU, or TPU) to load the checkpoint onto.
+
+    Returns:
+        model: The model with loaded weights.
+        epoch: The epoch number from the checkpoint.
+        best_loss: The best loss value from the checkpoint.
+    """
+    if os.path.exists(checkpoint_path):
         print(f"Loading checkpoint from {checkpoint_path}")
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-
-        # First handle frequencies
-        if "frequencies" in checkpoint:
-            print("Loading frequencies from checkpoint...")
-            model.latent_mapper.frequencies = checkpoint["frequencies"].to(device)
-        else:
-            print("No frequencies found in checkpoint, initializing...")
-            model.latent_mapper._initialize_frequencies()
-
-        # Clean state dict
-        state_dict = checkpoint["model_state_dict"]
-        cleaned_state_dict = {}
-
-        for k, v in state_dict.items():
-            # Remove any 'module.' prefix from DataParallel
-            name = k.replace('module.', '')
-            cleaned_state_dict[name] = v.to(device)  # Ensure weights are on the correct device
-
-        # Ensure frequencies are in state dict
-        if 'latent_mapper.frequencies' not in cleaned_state_dict:
-            cleaned_state_dict['latent_mapper.frequencies'] = model.latent_mapper.frequencies.to(device)
-
-        # Load state dict
-        model.load_state_dict(cleaned_state_dict, strict=True)
-
-        # Ensure the model is on the correct device
-        model = model.to(device)
-
-        print(f"Successfully loaded checkpoint with frequencies shape: {model.latent_mapper.frequencies.shape}")
-        return model, checkpoint.get("epoch", 0), checkpoint.get("loss", float("inf"))
-
-    except Exception as e:
-        print(f"Error loading checkpoint: {e}")
-        print("Initializing fresh model with new frequencies...")
-        model.latent_mapper._initialize_frequencies()
+        checkpoint = torch.load(checkpoint_path, map_location=device)  # Load checkpoint onto the correct device
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model = model.to(device)  # Ensure model is on the correct device
+        epoch = checkpoint.get("epoch", 0)
+        best_loss = checkpoint.get("best_loss", float("inf"))
+        return model, epoch, best_loss
+    else:
+        print("No checkpoint found. Starting from scratch.")
         return model, 0, float("inf")
-
 def setup_dataset(dataset_name):
     """Set up a torchvision dataset and return a full configuration."""
     # Convert dataset name to uppercase for torchvision

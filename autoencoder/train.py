@@ -39,7 +39,7 @@ def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_star
 
     # Progress bar
     progress = batch / total_batches
-    bar_width = box_width - 20
+    bar_width = box_width - 2
     filled = int(bar_width * progress)
     bar = "█" * filled + "-" * (bar_width - filled)
 
@@ -50,13 +50,13 @@ def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_star
     print(f"{Fore.GREEN}{top_left}{horizontal * box_width}{top_right}{Style.RESET_ALL}")
 
     # Epoch and progress information
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (box_width - 20)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (box_width - 2)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
     print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} [{bar}] {progress:.1%} {' ' * 5}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
 
     # Training metrics
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Batch: {batch}/{total_batches} {' ' * (box_width - 25)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Current Loss: {loss:.6f} {' ' * (box_width - 30)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Average Loss: {avg_loss:.6f} {' ' * (box_width - 30)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Batch: {batch}/{total_batches} {' ' * (box_width - 2)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Current Loss: {loss:.6f} {' ' * (box_width - 2)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Average Loss: {avg_loss:.6f} {' ' * (box_width - 2)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
 
     # Draw bottom border
     print(f"{Fore.GREEN}{bottom_left}{horizontal * box_width}{bottom_right}{Style.RESET_ALL}")
@@ -83,7 +83,8 @@ def train_model(config):
     progress_start = header_height + 2
 
     # Initial setup
-    device = get_device()
+    device = get_device()  # Automatically detect and set the device (CPU, GPU, or TPU)
+    print(f"Using device: {device}")
 
     # Ensure dataset config exists
     if "dataset" not in config:
@@ -99,7 +100,7 @@ def train_model(config):
     )
 
     # Model setup
-    model = ModifiedAutoencoder(config).to(device)
+    model = ModifiedAutoencoder(config).to(device)  # Move model to the correct device
 
     # Check for an existing model checkpoint
     checkpoint_dir = config["training"]["checkpoint_dir"]
@@ -107,7 +108,7 @@ def train_model(config):
 
     if os.path.exists(checkpoint_path):
         print(f"Loading existing model from {checkpoint_path}")
-        model, _, _ = load_checkpoint(checkpoint_path, model, config)
+        model, _, _ = load_checkpoint(checkpoint_path, model, config, device)
     else:
         print("No existing model found. Initializing a new model.")
 
@@ -136,7 +137,7 @@ def train_model(config):
 
     if mse_enabled:
         mse_weight = loss_functions["mse"].get("weight", 1.0)
-        criterion_mse = nn.MSELoss()
+        criterion_mse = nn.MSELoss().to(device)  # Move loss function to the correct device
 
     if ssim_enabled:
         ssim_weight = loss_functions["ssim"].get("weight", 1.0)
@@ -149,7 +150,7 @@ def train_model(config):
 
     # Initialize confusion matrix (not used in this version)
     num_classes = len(train_dataset.classes)
-    confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.float32)
+    confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.float32).to(device)  # Move to device
 
     # Training loop
     for epoch in range(epochs):
@@ -158,8 +159,8 @@ def train_model(config):
         num_batches = len(train_loader)
 
         for batch_idx, (images, labels) in enumerate(train_loader):
-            images = images.to(device)
-            model = model.to(device)
+            images = images.to(device)  # Move images to the correct device
+            labels = labels.to(device)  # Move labels to the correct device
 
             # Forward pass: Get reconstructed images
             reconstructed, latent = model(images)
