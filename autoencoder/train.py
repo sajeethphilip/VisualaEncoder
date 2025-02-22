@@ -176,7 +176,7 @@ def train_model(config):
             class_metrics, num_groups = update_confusion_matrix(images, reconstructed, labels, confusion_matrix, screen_group=0)
 
             # Update progress display with box
-             draw_progress_box(epoch, batch_idx + 1, num_batches, loss.item(), avg_loss, progress_start=14, epochs=epochs)
+            draw_progress_box(epoch, batch_idx + 1, num_batches, loss.item(), avg_loss, progress_start=14, epochs=epochs)
 
         # End of epoch processing
         avg_epoch_loss = epoch_loss / num_batches
