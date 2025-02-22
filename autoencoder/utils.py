@@ -84,7 +84,7 @@ from colorama import init, Fore, Back, Style
 def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, screen_group=0):
     """
     Update the confusion matrix based on the similarity between original and reconstructed images.
-    Compute similarity metrics (MSE, PSNR, SSIM) for each class and display them in groups that fit the screen.
+    Compute similarity metrics (MSE, PSNR, SSIM) for each class and display them in a 10-column grid.
 
     Args:
         original: Original images tensor (B, C, H, W)
@@ -163,10 +163,18 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, s
             class_metrics["PSNR"][class_id.item()] = psnr
             class_metrics["SSIM"][class_id.item()] = ssim_value
 
-        # Determine how many classes can fit on the screen
+        # Determine screen dimensions
         screen_height = os.get_terminal_size().lines
         screen_width = os.get_terminal_size().columns
-        classes_per_screen = (screen_height - 20) // 4  # 4 rows per class (label + 3 metrics)
+
+        # Calculate the number of columns (10 columns, but ensure they fit within the left half of the screen)
+        num_columns = 10
+        column_width = (screen_width // 2) // num_columns  # Width of each column
+        start_col = 10  # Start displaying metrics at column 10
+        end_col = start_col + (num_columns * column_width)  # End column
+
+        # Determine how many classes can fit on the screen
+        classes_per_screen = (screen_height - 15) * num_columns  # 10 columns, starting from row 15
         classes_per_screen = max(1, classes_per_screen)  # Ensure at least 1 class per screen
 
         # Split the classes into groups
@@ -175,16 +183,23 @@ def update_confusion_matrix(original, reconstructed, labels, confusion_matrix, s
 
         # Display the current group of classes
         current_group = screen_group % len(class_groups)
-        start_col = screen_width // 2  # Start displaying metrics in the later half of the screen
-        print(f"\033[20;{start_col}H\033[K")  # Move to row 20, start_col and clear the line
-        print(f"\033[20;{start_col}HPer-Class Similarity Metrics (Group {current_group + 1}/{len(class_groups)}):")
-        row = 21  # Start printing metrics from row 21
+        print(f"\033[15;{start_col}H\033[K")  # Move to row 15, start_col and clear the line
+        print(f"\033[15;{start_col}HPer-Class Similarity Metrics (Group {current_group + 1}/{len(class_groups)}):")
+        row = 16  # Start printing metrics from row 16
+        col = start_col
+
         for class_id in class_groups[current_group]:
-            print(f"\033[{row};{start_col}HClass {class_id}:")
-            print(f"\033[{row + 1};{start_col}H  MSE: {class_metrics['MSE'].get(class_id, 'N/A'):.6f}")
-            print(f"\033[{row + 2};{start_col}H  PSNR: {class_metrics['PSNR'].get(class_id, 'N/A'):.2f} dB")
-            print(f"\033[{row + 3};{start_col}H  SSIM: {class_metrics['SSIM'].get(class_id, 'N/A'):.4f}")
-            row += 4  # Move to the next class's position
+            # Print class ID and metrics
+            print(f"\033[{row};{col}HClass {class_id}:")
+            print(f"\033[{row + 1};{col}H  MSE: {class_metrics['MSE'].get(class_id, 'N/A'):.6f}")
+            print(f"\033[{row + 2};{col}H  PSNR: {class_metrics['PSNR'].get(class_id, 'N/A'):.2f} dB")
+            print(f"\033[{row + 3};{col}H  SSIM: {class_metrics['SSIM'].get(class_id, 'N/A'):.4f}")
+
+            # Move to the next column
+            col += column_width
+            if col >= end_col:  # Move to the next row if the current row is full
+                col = start_col
+                row += 4
 
         return class_metrics, len(class_groups)
 
