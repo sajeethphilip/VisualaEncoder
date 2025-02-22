@@ -63,9 +63,9 @@ def ssim_loss(original, reconstructed):
     """
     Compute the SSIM loss between original and reconstructed images.
     """
-    # Convert tensors to numpy arrays
-    original_np = original.cpu().numpy()
-    reconstructed_np = reconstructed.cpu().numpy()
+    # Detach tensors from the computation graph and convert to numpy arrays
+    original_np = original.detach().cpu().numpy()
+    reconstructed_np = reconstructed.detach().cpu().numpy()
 
     # Compute SSIM for each image in the batch
     ssim_values = []
@@ -83,6 +83,7 @@ def ssim_loss(original, reconstructed):
 
     # SSIM loss: 1 - SSIM (since SSIM ranges from -1 to 1, with 1 being perfect similarity)
     return 1 - ssim_tensor.mean()
+
 def verify_latent_saving(dataset_name, class_folders):
     """Verify that latent space CSV files are properly saved."""
     base_dir = f"data/{dataset_name}/latent_space/train"
