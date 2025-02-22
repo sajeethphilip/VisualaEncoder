@@ -50,13 +50,13 @@ def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_star
     print(f"{Fore.GREEN}{top_left}{horizontal * box_width}{top_right}{Style.RESET_ALL}")
 
     # Epoch and progress information
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (box_width - 14)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} [{bar}] {progress:.1%} {' ' * 5}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Epoch: {epoch + 1}/{epochs} {' ' * (box_width - 14)}{Style.RESET_ALL}") #{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} [{bar}] {progress:.1%} {' ' * 5}{Style.RESET_ALL}") #{Fore.GREEN}{vertical}{Style.RESET_ALL}")
 
     # Training metrics
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Batch: {batch}/{total_batches} {' ' * (box_width - 16)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Current Loss: {loss:.6f} {' ' * (box_width - 24)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
-    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Average Loss: {avg_loss:.6f} {' ' * (box_width - 24)}{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Batch: {batch}/{total_batches} {' ' * (box_width - 16)}{Style.RESET_ALL}") #{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Current Loss: {loss:.6f} {' ' * (box_width - 24)}{Style.RESET_ALL}") #{Fore.GREEN}{vertical}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}{vertical}{Style.RESET_ALL} Average Loss: {avg_loss:.6f} {' ' * (box_width - 24)}{Style.RESET_ALL}") #{Fore.GREEN}{vertical}{Style.RESET_ALL}")
 
     # Draw bottom border
     print(f"{Fore.GREEN}{bottom_left}{horizontal * box_width}{bottom_right}{Style.RESET_ALL}")
@@ -161,7 +161,7 @@ def train_model(config):
         for batch_idx, (images, labels) in enumerate(train_loader):
             images = images.to(device)  # Move images to the correct device
             labels = labels.to(device)  # Move labels to the correct device
-
+            model=model.to(device)  # Move model to the correct device
             # Forward pass: Get reconstructed images
             reconstructed, latent = model(images)
 
