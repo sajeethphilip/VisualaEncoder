@@ -692,28 +692,22 @@ def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
 
 def load_1d_latent_from_csv(csv_path):
     """
-    Load 1D latent representation from CSV with metadata.
+    Load 1D latent representation from CSV in the new format.
 
     Returns:
-        tuple: (latent_tensor, metadata_dict)
+        tuple: (latent_tensor, frequencies_tensor)
     """
     try:
-        df = pd.read_csv(csv_path)
+        # Load data from CSV
+        data = np.loadtxt(csv_path, delimiter=",")
 
-        # Extract metadata
-        metadata = {}
-        metadata_rows = df[df['type'] == 'metadata']
-        for _, row in metadata_rows.iterrows():
-            metadata[row['key']] = row['value']
+        # First row contains frequencies
+        frequencies = torch.tensor(data[0], dtype=torch.float32)
 
-        # Extract latent values
-        latent_row = df[df['type'] == 'latent_values'].iloc[0]
-        latent_values = [float(x) for x in latent_row['value'].split(',')]
+        # Second row contains latent values
+        latent_values = torch.tensor(data[1], dtype=torch.float32)
 
-        # Convert to tensor
-        latent_tensor = torch.tensor(latent_values)
-
-        return latent_tensor, metadata
+        return latent_values, frequencies
 
     except Exception as e:
         raise ValueError(f"Error loading latent values from CSV: {str(e)}")
@@ -1006,47 +1000,37 @@ def setup_dataset(dataset_name):
         logging.error(f"Error setting up dataset: {str(e)}")
         return None
 
-def save_latent_space_for_epoch(model, data_loader, device, dataset_name):
+def save_latent_space(latent_space, image_paths, dataset_name, frequencies):
     """
-    Save latent space representations for all images in the dataset at the end of an epoch.
+    Save latent space representations in the new CSV format.
 
     Args:
-        model: The trained autoencoder model.
-        data_loader: DataLoader for the dataset.
-        device: The device (CPU/GPU) where computations are performed.
+        latent_space: Tensor containing latent space representations.
+        image_paths: List of paths to the original images.
         dataset_name: Name of the dataset.
+        frequencies: Tensor containing the frequencies used for mapping.
     """
-    model.eval()  # Set the model to evaluation mode
-    latent_space = []
-    image_paths = []
+    base_latent_dir = os.path.join("data", dataset_name, "latent_space")
+    os.makedirs(base_latent_dir, exist_ok=True)
 
-    with torch.no_grad():
-        for batch in data_loader:
-            images, labels = batch
-            images = images.to(device)
+    for latent, image_path in zip(latent_space, image_paths):
+        # Get the relative path from the dataset directory to maintain hierarchy
+        rel_path = os.path.relpath(os.path.dirname(image_path), f"data/{dataset_name}/train")
+        target_dir = os.path.join(base_latent_dir, rel_path)
+        os.makedirs(target_dir, exist_ok=True)
 
-            # Forward pass: Get latent space representations
-            _, latent = model(images)
+        # Get the filename without extension
+        filename = os.path.splitext(os.path.basename(image_path))[0]
 
-            # Store latent space representations and image paths
-            latent_space.append(latent.cpu())
+        # Save latent space representation as CSV
+        csv_path = os.path.join(target_dir, f"{filename}.csv")
 
-            # Extract image paths correctly
-            if hasattr(data_loader.dataset, 'samples'):
-                # If samples is a list of tuples (image_path, label), extract only the paths
-                if isinstance(data_loader.dataset.samples[0], tuple):
-                    image_paths.extend([sample[0] for sample in data_loader.dataset.samples])
-                else:
-                    # If samples is a list of strings (image paths), use it directly
-                    image_paths.extend(data_loader.dataset.samples)
-            else:
-                raise ValueError("DataLoader dataset does not have 'samples' attribute.")
+        # Convert frequencies and latent values to numpy arrays
+        frequencies_np = frequencies.cpu().numpy()
+        latent_values_np = latent.cpu().numpy()
 
-    # Concatenate all batches
-    latent_space = torch.cat(latent_space, dim=0)
-
-    # Save latent space representations
-    save_latent_space(latent_space, image_paths, dataset_name)
+        # Save frequencies and latent values in the new format
+        np.savetxt(csv_path, [frequencies_np, latent_values_np], delimiter=",")
 
 def get_augmentation_transform(config):
     """Create a data augmentation transform based on the configuration."""
