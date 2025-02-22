@@ -176,36 +176,70 @@ def validate_config(config):
     print("Configuration is valid.")
 
 def check_and_fix_json(json_path, dataset_name, data_dir, image_path):
-    """Check if JSON file exists and is valid; only add missing features or create if damaged/missing."""
+    """
+    Check if JSON file exists and is valid; only add missing features or fix incorrect values.
+
+    Args:
+        json_path: Path to the JSON configuration file.
+        dataset_name: Name of the dataset.
+        data_dir: Directory containing the dataset.
+        image_path: Path to the first image in the dataset.
+
+    Returns:
+        Updated JSON configuration.
+    """
+    # Define default multiscale configuration
+    default_multiscale_config = {
+        "enabled": False,
+        "method": "wavelet",
+        "levels": 3,
+        "normalize_per_scale": True,
+        "resize_to_input": True
+    }
+
+    # Load default configuration for comparison
+    default_config = create_default_json_config(dataset_name, data_dir, image_path)
+
     try:
         # Try to load existing config
         with open(json_path, "r") as f:
             existing_config = json.load(f)
 
-        # Get default config for comparison
-        default_config = create_default_json_config(dataset_name, data_dir, image_path)
-
-        # Recursively update missing keys while preserving existing values
-        def update_missing(existing, default):
-            for key, value in default.items():
+        # Function to recursively update missing or incorrect keys
+        def update_config(existing, default):
+            changes_made = False
+            for key, default_value in default.items():
                 if key not in existing:
-                    existing[key] = value
-                elif isinstance(value, dict) and isinstance(existing[key], dict):
-                    update_missing(existing[key], value)
-            return existing
+                    # Add missing key
+                    existing[key] = default_value
+                    print(f"Added missing key '{key}' to configuration.")
+                    changes_made = True
+                elif isinstance(default_value, dict) and isinstance(existing[key], dict):
+                    # Recursively update nested dictionaries
+                    if update_config(existing[key], default_value):
+                        changes_made = True
+                elif not isinstance(existing[key], type(default_value)):
+                    # Fix incorrect value type
+                    existing[key] = default_value
+                    print(f"Fixed incorrect value for key '{key}' in configuration.")
+                    changes_made = True
+            return changes_made
 
-        # Update only missing features
-        updated_config = update_missing(existing_config, default_config)
+        # Update the existing configuration
+        changes_made = update_config(existing_config, default_config)
 
-        # Save only if changes were made
-        if updated_config != existing_config:
-            print(f"Adding missing configuration parameters to {json_path}")
+        # Save the updated configuration only if changes were made
+        if changes_made:
+            print(f"Updating configuration file at {json_path}")
             with open(json_path, "w") as f:
-                json.dump(updated_config, f, indent=4)
+                json.dump(existing_config, f, indent=4)
+        else:
+            print("Configuration is valid. No changes were made.")
 
-        return updated_config
+        return existing_config
 
     except (FileNotFoundError, json.JSONDecodeError) as e:
+        # If the file is missing or corrupted, create a new one
         print(f"Config file is missing or corrupted: {str(e)}")
         print(f"Creating new configuration file at {json_path}")
         return create_default_json_config(dataset_name, data_dir, image_path)
