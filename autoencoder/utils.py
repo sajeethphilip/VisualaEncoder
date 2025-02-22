@@ -80,8 +80,18 @@ def preprocess_hdr_image(image, config):
         if config["multiscale"]["normalize_per_scale"]:
             coeffs = [pywt.threshold(c, value=np.percentile(c, 99), mode="soft") for c in coeffs]
 
+        # Ensure coeffs is in the correct format for waverec2
+        if isinstance(coeffs, np.ndarray):
+            # If coeffs is a numpy array, convert it to a tuple of arrays
+            coeffs = tuple(coeffs)
+
         # Reconstruct the image from the decomposed scales
-        reconstructed = pywt.waverec2(coeffs, wavelet='db1')
+        try:
+            reconstructed = pywt.waverec2(coeffs, wavelet='db1')
+        except ValueError as e:
+            print(f"Error during wavelet reconstruction: {e}")
+            # Fallback to original image if reconstruction fails
+            reconstructed = image
 
         # Resize to match original dimensions if enabled
         if config["multiscale"]["resize_to_input"]:
