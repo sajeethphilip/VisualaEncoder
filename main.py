@@ -6,7 +6,7 @@ from PIL import Image
 from autoencoder.train import train_model
 from autoencoder.utils import download_and_extract, setup_dataset,extract_and_organize,find_first_image,reconstruct_image,reconstruct_from_latent,display_header
 
-def create_default_json_config(dataset_name, data_dir, image_path, latent_dim=128, embedding_dim=64, learning_rate=0.001, batch_size=32, epochs=20):
+def create_default_json_config(dataset_name, data_dir, image_path,write=True, latent_dim=128, embedding_dim=64, learning_rate=0.001, batch_size=32, epochs=20):
     """
     Create a default JSON configuration file interactively.
 
@@ -207,7 +207,7 @@ def check_and_fix_json(json_path, dataset_name, data_dir, image_path):
     }
 
     # Load default configuration for comparison
-    default_config = create_default_json_config(dataset_name, data_dir, image_path)
+    default_config = create_default_json_config(dataset_name, data_dir, image_path,write=False)
 
     try:
         # Try to load existing config
