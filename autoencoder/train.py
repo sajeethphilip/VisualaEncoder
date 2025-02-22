@@ -107,8 +107,18 @@ def train_model(config):
         eps=config["model"]["optimizer"]["epsilon"]
     )
 
-    # Loss functions setup
-    loss_functions = config["training"]["loss_functions"]
+    # Loss functions setup (with default values if missing)
+    loss_functions = config["training"].get("loss_functions", {
+        "mse": {
+            "enabled": True,
+            "weight": 1.0
+        },
+        "ssim": {
+            "enabled": False,
+            "weight": 0.0
+        }
+    })
+
     mse_enabled = loss_functions.get("mse", {}).get("enabled", False)
     ssim_enabled = loss_functions.get("ssim", {}).get("enabled", False)
 

@@ -962,6 +962,7 @@ def setup_dataset(dataset_name):
                 "early_stopping": {
                     "patience": 5,
                     "min_delta": 0.001
+                    }
                 },
                 "loss_functions": {
                     "mse": {
@@ -1018,7 +1019,7 @@ def setup_dataset(dataset_name):
                 "visualization_dir": os.path.join(data_dir, "visualizations")
             }
         }
-        }
+
         # Save dataset info to JSON file
         json_path = os.path.join(data_dir, f"{dataset_name}.json")
         with open(json_path, 'w') as f:
