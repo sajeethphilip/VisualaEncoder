@@ -20,7 +20,8 @@ def create_default_json_config(dataset_name, data_dir, image_path):
     learning_rate = float(input("Enter the learning rate (default: 0.001): ") or 0.001)
     batch_size = int(input("Enter the batch size (default: 32): ") or 32)
     epochs = int(input("Enter the number of epochs (default: 20): ") or 20)
-    classes=len(os.listdir(f"{data_dir}/train"))
+    classes = len(os.listdir(f"{data_dir}/train"))
+
     # Create JSON configuration
     config = {
         "dataset": {
@@ -69,82 +70,14 @@ def create_default_json_config(dataset_name, data_dir, image_path):
                     "clustering_temperature": 1.0,
                     "min_cluster_confidence": 0.7
                 }
-            },
-            "loss_functions": {
-                "astronomical_structure": {
-                    "enabled": True,
-                    "weight": 1.0,
-                    "components": {
-                        "edge_preservation": True,
-                        "peak_preservation": True,
-                        "detail_preservation": True
-                    }
-                },
-                "medical_structure": {
-                    "enabled": True,
-                    "weight": 1.0,
-                    "components": {
-                        "boundary_preservation": True,
-                        "tissue_contrast": True,
-                        "local_structure": True
-                    }
-                },
-                "agricultural_pattern": {
-                    "enabled": True,
-                    "weight": 1.0,
-                    "components": {
-                        "texture_preservation": True,
-                        "damage_pattern": True,
-                        "color_consistency": True
-                    }
-                }
-            },
-            "enhancement_modules": {
-                "astronomical": {
-                    "enabled": True,
-                    "components": {
-                        "structure_preservation": True,
-                        "detail_preservation": True,
-                        "star_detection": True,
-                        "galaxy_features": True,
-                        "kl_divergence": True
-                    },
-                    "weights": {
-                        "detail_weight": 1.0,
-                        "structure_weight": 0.8,
-                        "edge_weight": 0.7
-                    }
-                },
-                "medical": {
-                    "enabled": True,
-                    "components": {
-                        "tissue_boundary": True,
-                        "lesion_detection": True,
-                        "contrast_enhancement": True,
-                        "subtle_feature_preservation": True
-                    },
-                    "weights": {
-                        "boundary_weight": 1.0,
-                        "lesion_weight": 0.8,
-                        "contrast_weight": 0.6
-                    }
-                },
-                "agricultural": {
-                    "enabled": True,
-                    "components": {
-                        "texture_analysis": True,
-                        "damage_detection": True,
-                        "color_anomaly": True,
-                        "pattern_enhancement": True,
-                        "morphological_features": True
-                    },
-                    "weights": {
-                        "texture_weight": 1.0,
-                        "damage_weight": 0.8,
-                        "pattern_weight": 0.7
-                    }
-                }
             }
+        },
+        "multiscale": {
+            "enabled": False,  # Default: Disabled
+            "method": "wavelet",  # Options: "wavelet", "laplacian", "gaussian"
+            "levels": 3,  # Number of decomposition levels
+            "normalize_per_scale": True,  # Normalize each scale independently
+            "resize_to_input": True  # Resize decomposed image to match input dimensions
         },
         "training": {
             "batch_size": batch_size,
@@ -217,7 +150,7 @@ def create_default_json_config(dataset_name, data_dir, image_path):
 
 def validate_config(config):
     """Validate the configuration dictionary."""
-    required_keys = ["dataset", "model", "training", "augmentation", "logging", "output"]
+    required_keys = ["dataset", "model", "training", "augmentation", "logging", "output", "multiscale"]
     for key in required_keys:
         if key not in config:
             raise ValueError(f"Missing required key in config: {key}")
@@ -233,6 +166,12 @@ def validate_config(config):
     for key in training_keys:
         if key not in config["training"]:
             raise ValueError(f"Missing required key in config['training']: {key}")
+
+    # Validate multiscale-specific keys
+    multiscale_keys = ["enabled", "method", "levels", "normalize_per_scale", "resize_to_input"]
+    for key in multiscale_keys:
+        if key not in config["multiscale"]:
+            raise ValueError(f"Missing required key in config['multiscale']: {key}")
 
     print("Configuration is valid.")
 
@@ -299,8 +238,7 @@ def main():
                 return
 
             config_path = os.path.join(f"data/{dataset_name}", f"{dataset_name}.json")
-            with open(config_path, 'r') as f:
-                config = json.load(f)
+            config = check_and_fix_json(config_path, dataset_name, f"data/{dataset_name}", find_first_image(f"data/{dataset_name}/train"))
 
             print(f"\n{Style.BRIGHT}{Fore.CYAN}Reconstructing image(s)...{Style.RESET_ALL}")
 
@@ -330,7 +268,7 @@ def main():
                 dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
                 data_dir = extract_and_organize(url, dataset_name, is_url=True)
                 first_image = find_first_image(data_dir)
-                config = create_default_json_config(dataset_name, data_dir, first_image)
+                config = check_and_fix_json(os.path.join(data_dir, f"{dataset_name}.json"), dataset_name, data_dir, first_image)
             elif data_source == "3":
                 source_path = input(f"{Style.BRIGHT}{Fore.WHITE}Enter the path to the local file/folder: {Style.RESET_ALL}")
                 dataset_name = input(f"{Style.BRIGHT}{Fore.WHITE}Enter a name for the dataset: {Style.RESET_ALL}")
@@ -339,7 +277,7 @@ def main():
                 else:
                     data_dir = source_path
                 first_image = find_first_image(data_dir)
-                config = create_default_json_config(dataset_name, data_dir, first_image)
+                config = check_and_fix_json(os.path.join(data_dir, f"{dataset_name}.json"), dataset_name, data_dir, first_image)
             else:
                 print(f"{Style.BRIGHT}{Fore.RED}Invalid choice. Exiting...{Style.RESET_ALL}")
                 return
