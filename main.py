@@ -219,9 +219,9 @@ def check_and_fix_json(json_path, dataset_name, data_dir, image_path):
                     if update_config(existing[key], default_value):
                         changes_made = True
                 elif not isinstance(existing[key], type(default_value)):
-                    # Fix incorrect value type
+                    # Fix incorrect value type only if the existing value is of the wrong type
+                    print(f"Fixing incorrect value type for key '{key}' in configuration.")
                     existing[key] = default_value
-                    print(f"Fixed incorrect value for key '{key}' in configuration.")
                     changes_made = True
             return changes_made
 
@@ -311,7 +311,15 @@ def main():
                 else:
                     data_dir = source_path
                 first_image = find_first_image(data_dir)
-                config = check_and_fix_json(os.path.join(data_dir, f"{dataset_name}.json"), dataset_name, data_dir, first_image)
+
+                # Check if JSON file exists
+                json_path = os.path.join(data_dir, f"{dataset_name}.json")
+                if os.path.exists(json_path):
+                    # If JSON file exists, validate and update it
+                    config = check_and_fix_json(json_path, dataset_name, data_dir, first_image)
+                else:
+                    # If JSON file does not exist, create a new one
+                    config = create_default_json_config(dataset_name, data_dir, first_image)
             else:
                 print(f"{Style.BRIGHT}{Fore.RED}Invalid choice. Exiting...{Style.RESET_ALL}")
                 return
