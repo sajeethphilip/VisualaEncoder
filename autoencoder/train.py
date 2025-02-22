@@ -12,7 +12,7 @@ from datetime import datetime
 from tqdm import tqdm
 from colorama import init, Fore, Back, Style
 
-def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_start=14):
+def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_start, epochs):
     """
     Draw a progress box with training metrics at a fixed position on the screen.
 
@@ -23,6 +23,7 @@ def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_star
         loss: Current loss value
         avg_loss: Average loss so far
         progress_start: Starting row for the progress box
+        epochs: Total number of epochs
     """
     # Box drawing characters
     top_left = "╔"
@@ -59,7 +60,6 @@ def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_star
 
     # Draw bottom border
     print(f"{Fore.GREEN}{bottom_left}{horizontal * box_width}{bottom_right}{Style.RESET_ALL}")
-
 def train_model(config):
     """Train the autoencoder model with configurable loss functions."""
     # Check if config is None
@@ -176,7 +176,7 @@ def train_model(config):
             class_metrics, num_groups = update_confusion_matrix(images, reconstructed, labels, confusion_matrix, screen_group=0)
 
             # Update progress display with box
-            draw_progress_box(epoch, batch_idx + 1, num_batches, loss.item(), avg_loss, progress_start=14)
+             draw_progress_box(epoch, batch_idx + 1, num_batches, loss.item(), avg_loss, progress_start=14, epochs=epochs)
 
         # End of epoch processing
         avg_epoch_loss = epoch_loss / num_batches
