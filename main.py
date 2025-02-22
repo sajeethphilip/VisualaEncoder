@@ -51,9 +51,8 @@ def create_default_json_config(dataset_name, data_dir, image_path, latent_dim=12
             "levels": 3,
             "normalize_per_scale": True,
             "resize_to_input": True
-            },
-
-        "model": {
+        },
+            "model": {
             "encoder_type": "autoenc",
             "feature_dims": latent_dim,
             "learning_rate": learning_rate,
