@@ -654,14 +654,22 @@ def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
                     csv_path = os.path.join(current_dir, file)
 
                     # Load latent data from CSV
-                    df = pd.read_csv(csv_path)
-                    latent_row = df[df['type'] == 'latent_values'].iloc[0]
-                    latent_values = np.array([float(x) for x in latent_row['value'].split(',')]).reshape(1, -1)
-                    latent_tensor = torch.tensor(latent_values, dtype=torch.float32).to(device)
+                    data = np.loadtxt(csv_path, delimiter=",")
+
+                    # Extract frequencies and latent values
+                    frequencies_np = data[0]  # First row contains frequencies
+                    latent_values_np = data[1]  # Second row contains latent values
+
+                    # Convert to tensors
+                    frequencies = torch.tensor(frequencies_np, dtype=torch.float32).to(device)
+                    latent_values = torch.tensor(latent_values_np, dtype=torch.float32).to(device)
+
+                    # Reshape latent values to match model input
+                    latent_values = latent_values.view(1, -1)  # Reshape to (1, latent_dim)
 
                     with torch.no_grad():
                         # Inverse map the latent values
-                        decoded_flat = model.latent_mapper.inverse_map(latent_tensor)
+                        decoded_flat = model.latent_mapper.inverse_map(latent_values)
                         decoded_volume = decoded_flat.view(1, -1, 1, 1)
                         reconstructed = model.decoder(decoded_volume)
 
