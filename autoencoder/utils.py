@@ -74,16 +74,11 @@ def preprocess_hdr_image(image, config):
 
     if config["multiscale"]["enabled"]:
         # Decompose the image into multiple scales
-        coeffs = multiscale_decompose(image, method=config["multiscale"]["method"], levels=config["multiscale"]["levels"])
+        coeffs = pywt.wavedec2(image, wavelet='db1', level=config["multiscale"]["levels"])
 
         # Normalize each scale independently if enabled
         if config["multiscale"]["normalize_per_scale"]:
             coeffs = [pywt.threshold(c, value=np.percentile(c, 99), mode="soft") for c in coeffs]
-
-        # Ensure coeffs is in the correct format for waverec2
-        if isinstance(coeffs, np.ndarray):
-            # If coeffs is a numpy array, convert it to a tuple of arrays
-            coeffs = tuple(coeffs)
 
         # Reconstruct the image from the decomposed scales
         try:
@@ -101,6 +96,12 @@ def preprocess_hdr_image(image, config):
 
     # Convert to PyTorch tensor
     image_tensor = transforms.ToTensor()(image)
+
+    # Ensure the tensor has 3 channels (RGB)
+    if image_tensor.shape[0] != 3:
+        # If the image is grayscale, repeat the single channel to create 3 channels
+        image_tensor = image_tensor.repeat(3, 1, 1)
+
     return image_tensor
 
 def multiscale_decompose(image, method="wavelet", levels=3):
