@@ -6,7 +6,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from autoencoder.model import Autoencoder, ModifiedAutoencoder
-from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv, save_checkpoint, update_progress, display_confusion_matrix,ssim_loss
+from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv, save_checkpoint, update_progress, display_confusion_matrix,ssim_loss,save_latent_space_for_epoch
 from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv, save_batch_latents, display_header,update_confusion_matrix
 from datetime import datetime
 from tqdm import tqdm
@@ -34,7 +34,7 @@ def draw_progress_box(epoch, batch, total_batches, loss, avg_loss, progress_star
     vertical = "║"
 
     # Box dimensions
-    box_width = 60
+    box_width = 53
     box_height = 8
 
     # Progress bar
@@ -100,6 +100,17 @@ def train_model(config):
 
     # Model setup
     model = ModifiedAutoencoder(config).to(device)
+
+    # Check for an existing model checkpoint
+    checkpoint_dir = config["training"]["checkpoint_dir"]
+    checkpoint_path = os.path.join(checkpoint_dir, "best_model.pth")
+
+    if os.path.exists(checkpoint_path):
+        print(f"Loading existing model from {checkpoint_path}")
+        model, _, _ = load_checkpoint(checkpoint_path, model, config)
+    else:
+        print("No existing model found. Initializing a new model.")
+
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=config["model"]["learning_rate"],
@@ -201,7 +212,6 @@ def train_model(config):
     print(f"\033[{progress_start + 20}H\033[K")
     print("Training complete!")
     return model
-
 
 def save_final_representations(model, loader, device, dataset_name):
     """Save the final latent space and embeddings."""
