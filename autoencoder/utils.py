@@ -983,7 +983,7 @@ def setup_dataset(dataset_name):
                 "levels": 3,  # Number of decomposition levels
                 "normalize_per_scale": True,  # Normalize each scale independently
                 "resize_to_input": True  # Resize decomposed image to match input dimensions
-              }
+              },
 
             "model": {
                 "encoder_type": "autoenc",
