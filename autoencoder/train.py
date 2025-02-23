@@ -8,7 +8,7 @@ from tqdm import tqdm
 from autoencoder.model import Autoencoder, ModifiedAutoencoder
 from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv, save_checkpoint, update_progress, display_confusion_matrix,save_predicted_images
 from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv, save_batch_latents, display_header,create_mosaic
-from autoencoder.utils import save_images,ssim_loss,save_latent_space_for_epoch,postprocess_hdr_image,update_confusion_matrix,preprocess_hdr_image
+from autoencoder.utils import save_images,ssim_loss,save_latent_space_for_epoch,postprocess_hdr_image,update_confusion_matrix,preprocess_hdr_image,denormalize
 from datetime import datetime
 from tqdm import tqdm
 from colorama import init, Fore, Back, Style
