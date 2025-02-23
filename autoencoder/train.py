@@ -215,14 +215,17 @@ def train_model(config):
             if batch_idx % 10 == 0:  # Save every 10 batches
                 save_mosaic_path = os.path.join("training_mosaics", f"epoch_{epoch}_batch_{batch_idx}_mosaic.png")
 
+                # Get mean and std from config
+                mean = config["dataset"]["mean"]
+                std = config["dataset"]["std"]
+
                 # Create mosaic based on whether multiscale is enabled
                 if config["multiscale"]["enabled"]:
                     # If multiscale is enabled, create a mosaic of 3 images: original, reconstructed, and predicted
-                    create_mosaic(original_images, reconstructed_images, predicted_images, save_mosaic_path)
+                    create_mosaic(original_images, reconstructed_images, predicted_images, save_mosaic_path, mean, std)
                 else:
                     # If multiscale is disabled, create a mosaic of 2 images: input and predicted
-                    create_mosaic(original_images, None, predicted_images, save_mosaic_path)
-
+                    create_mosaic(original_images, None, predicted_images, save_mosaic_path, mean, std)
                 # Save predicted images
                 save_predicted_images(predicted_images, "predicted_images", epoch, batch_idx)
 

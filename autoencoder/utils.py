@@ -94,44 +94,59 @@ def save_predicted_images(predicted_images, save_dir, epoch, batch_idx):
         save_path = os.path.join(save_dir, f"epoch_{epoch}_batch_{batch_idx}_image_{i}.png")
         vutils.save_image(image.float() / 255.0, save_path, normalize=False)  # Save as [0, 1] for visualization
 
-def create_mosaic(original, reconstructed, predicted, save_path):
+def create_mosaic(original, reconstructed, predicted, save_path, mean, std):
     """
     Create a mosaic of images (original, reconstructed, predicted) and save it.
     If reconstructed is None, create a mosaic of only original and predicted.
+    Args:
+        original: Original image tensor (normalized).
+        reconstructed: Reconstructed image tensor (normalized) or None.
+        predicted: Predicted image tensor (normalized).
+        save_path: Path to save the mosaic image.
+        mean: List of mean values for denormalization.
+        std: List of std values for denormalization.
     """
     # Ensure the images are on the CPU
     original = original.cpu()
     predicted = predicted.cpu()
 
-    # Rescale images to [0, 255] if necessary
-    if original.min().item() < 0:  # If in [-1, 1]
-        original = ((original + 1) * 127.5).byte()
-    else:  # If in [0, 1]
-        original = (original * 255).byte()
-
-    if predicted.min().item() < 0:  # If in [-1, 1]
-        predicted = ((predicted + 1) * 127.5).byte()
-    else:  # If in [0, 1]
-        predicted = (predicted * 255).byte()
+    # Denormalize the images
+    original = denormalize(original, mean, std)
+    predicted = denormalize(predicted, mean, std)
 
     # Handle reconstructed images if available
     if reconstructed is not None:
         reconstructed = reconstructed.cpu()
-        if reconstructed.min().item() < 0:  # If in [-1, 1]
-            reconstructed = ((reconstructed + 1) * 127.5).byte()
-        else:  # If in [0, 1]
-            reconstructed = (reconstructed * 255).byte()
+        reconstructed = denormalize(reconstructed, mean, std)
 
         # Concatenate the images horizontally (original, reconstructed, predicted)
-        mosaic = torch.cat([original, reconstructed, predicted], dim=3)  # Concatenate along the width dimension
+        mosaic = torch.cat([original, reconstructed, predicted], dim=3)
     else:
         # Concatenate only original and predicted images
-        mosaic = torch.cat([original, predicted], dim=3)  # Concatenate along the width dimension
+        mosaic = torch.cat([original, predicted], dim=3)
+
+    # Rescale images to [0, 255] and convert to byte tensor
+    mosaic = (mosaic * 255).byte()
 
     # Save the mosaic
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    vutils.save_image(mosaic.float() / 255.0, save_path, normalize=False)  # Save as [0, 1] for visualization
+    vutils.save_image(mosaic.float() / 255.0, save_path, normalize=False)
 
+
+
+def denormalize(image_tensor, mean, std):
+    """
+    Denormalize a tensor image using the given mean and std.
+    Args:
+        image_tensor: Normalized image tensor (C, H, W).
+        mean: List of mean values for each channel.
+        std: List of std values for each channel.
+    Returns:
+        Denormalized image tensor.
+    """
+    mean = torch.tensor(mean).view(3, 1, 1).to(image_tensor.device)
+    std = torch.tensor(std).view(3, 1, 1).to(image_tensor.device)
+    return image_tensor * std + mean
 
 
 def save_images(input_images, predicted_images, epoch, batch_idx, save_dir="training_images"):
