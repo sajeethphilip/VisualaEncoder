@@ -75,22 +75,39 @@ def create_mosaic(original, reconstructed, predicted, save_path):
     """
     Create a mosaic of three images (original, reconstructed, predicted) and save it.
     Args:
-        original: Tensor of original images.
-        reconstructed: Tensor of reconstructed wavelet-decomposed images.
-        predicted: Tensor of predicted images.
+        original: Tensor of original images in the range [0, 1] or [-1, 1].
+        reconstructed: Tensor of reconstructed wavelet-decomposed images in the range [0, 1] or [-1, 1].
+        predicted: Tensor of predicted images in the range [0, 1] or [-1, 1].
         save_path: Path to save the mosaic image.
     """
-    # Ensure the images are on the CPU and in the range [0, 1]
+    # Ensure the images are on the CPU
     original = original.cpu()
     reconstructed = reconstructed.cpu()
     predicted = predicted.cpu()
+
+    # Rescale images to [0, 255] if necessary
+    if original.min().item() < 0:  # If in [-1, 1]
+        original = ((original + 1) * 127.5).byte()
+    else:  # If in [0, 1]
+        original = (original * 255).byte()
+
+    if reconstructed.min().item() < 0:  # If in [-1, 1]
+        reconstructed = ((reconstructed + 1) * 127.5).byte()
+    else:  # If in [0, 1]
+        reconstructed = (reconstructed * 255).byte()
+
+    if predicted.min().item() < 0:  # If in [-1, 1]
+        predicted = ((predicted + 1) * 127.5).byte()
+    else:  # If in [0, 1]
+        predicted = (predicted * 255).byte()
 
     # Concatenate the images horizontally
     mosaic = torch.cat([original, reconstructed, predicted], dim=3)  # Concatenate along the width dimension
 
     # Save the mosaic
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    vutils.save_image(mosaic, save_path, normalize=True)
+    vutils.save_image(mosaic.float() / 255.0, save_path, normalize=False)  # Save as [0, 1] for visualization
+
 
 def save_images(input_images, predicted_images, epoch, batch_idx, save_dir="training_images"):
     """
@@ -890,12 +907,11 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, metadata=None):
 def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
     """
     Reconstruct images from latent CSV files maintaining the original folder hierarchy.
-
     Args:
-        latent_dir: Directory containing latent space CSV files
-        checkpoint_path: Path to the model checkpoint
-        dataset_name: Name of the dataset
-        config: Model configuration dictionary
+        latent_dir: Directory containing latent space CSV files.
+        checkpoint_path: Path to the model checkpoint.
+        dataset_name: Name of the dataset.
+        config: Model configuration dictionary.
     """
     device = get_device()
     print(f"Using device: {device}")
@@ -904,7 +920,7 @@ def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
     model = ModifiedAutoencoder(config, device=device).to(device)
 
     # Load checkpoint
-    print(f"Loading checkpoint from {checkpoint_path}")
+    print(f"Loading checkpoint from {checkpoint_path}...")
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
@@ -958,9 +974,14 @@ def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
                     output_name = os.path.splitext(file)[0] + '.png'
                     output_path = os.path.join(recon_dir, output_name)
 
-                    # Convert and save
-                    image = transforms.ToPILImage()(reconstructed.squeeze(0).cpu())
-                    image.save(output_path)
+                    # Rescale predicted image to [0, 255] and save as PNG
+                    if reconstructed.min().item() < 0:  # If in [-1, 1]
+                        reconstructed = ((reconstructed + 1) * 127.5).byte()
+                    else:  # If in [0, 1]
+                        reconstructed = (reconstructed * 255).byte()
+
+                    # Save the image
+                    vutils.save_image(reconstructed.float() / 255.0, output_path, normalize=False)
 
                 except Exception as e:
                     print(f"Error processing {csv_path}: {str(e)}")
@@ -1770,22 +1791,38 @@ def reconstruct_image(path, checkpoint_path, dataset_name, config):
         print(f"Processing single image: {path}")
         device = get_device()
 
+        # Initialize model
         model = ModifiedAutoencoder(config, device=device).to(device)
+
+        # Load checkpoint
+        print(f"Loading model checkpoint from {checkpoint_path}...")
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         model.eval()
 
+        # Preprocess the input image
         image_tensor = preprocess_image(path, device, config)
 
+        # Forward pass: Get predicted image
         with torch.no_grad():
             reconstructed, latent_1d = model(image_tensor)
-            save_reconstructed_image(
-                image_tensor,
-                reconstructed,
-                dataset_name,
-                filename=os.path.basename(path)
-            )
 
+        # Save the predicted image
+        save_dir = os.path.join("data", dataset_name, "reconstructed_images")
+        os.makedirs(save_dir, exist_ok=True)
+
+        # Rescale predicted image to [0, 255] and save as PNG
+        if reconstructed.min().item() < 0:  # If in [-1, 1]
+            reconstructed = ((reconstructed + 1) * 127.5).byte()
+        else:  # If in [0, 1]
+            reconstructed = (reconstructed * 255).byte()
+
+        # Save the image
+        output_name = os.path.splitext(os.path.basename(path))[0] + '.png'
+        output_path = os.path.join(save_dir, output_name)
+        vutils.save_image(reconstructed.float() / 255.0, output_path, normalize=False)
+
+        print(f"Reconstructed image saved to {output_path}")
 
 def reconstruct_folder(input_dir, checkpoint_path, dataset_name, config):
     """Reconstruct all images in a directory structure maintaining the hierarchy."""
