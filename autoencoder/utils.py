@@ -74,6 +74,64 @@ def preprocess_hdr_image(image, config):
     Returns:
         Preprocessed image (PyTorch tensor).
     """
+    original_shape = image.shape
+
+    if config["multiscale"]["enabled"]:
+        # Decompose the image into multiple scales
+        coeffs = pywt.wavedec2(image, wavelet='db1', level=config["multiscale"]["levels"])
+
+        if config["multiscale"]["normalize_per_scale"]:
+            # Normalize each scale independently
+            new_coeffs = []
+            for i, c in enumerate(coeffs):
+                if i == 0:
+                    # Normalize approximation coefficients
+                    c_mean = np.mean(c)
+                    c_std = np.std(c)
+                    c_normalized = (c - c_mean) / (c_std + 1e-8)
+                    new_coeffs.append(c_normalized)
+                else:
+                    # Normalize detail coefficients (horizontal, vertical, diagonal)
+                    c_normalized = tuple((arr - np.mean(arr)) / (np.std(arr) + 1e-8) for arr in c)
+                    new_coeffs.append(c_normalized)
+            coeffs = new_coeffs
+
+        # Reconstruct the image from the decomposed scales
+        try:
+            reconstructed = pywt.waverec2(coeffs, wavelet='db1')
+        except ValueError as e:
+            # Fallback to original image if reconstruction fails
+            reconstructed = image
+
+        # Resize to match original dimensions if enabled
+        if config["multiscale"]["resize_to_input"]:
+            reconstructed = resize(reconstructed, original_shape, mode="reflect", anti_aliasing=True)
+
+        image = reconstructed
+
+    # Convert to PyTorch tensor
+    if isinstance(image, np.ndarray):
+        image_tensor = torch.from_numpy(image).float()  # Convert to float tensor
+    else:
+        image_tensor = transforms.ToTensor()(image)  # Fallback to ToTensor for PIL images
+
+    # Ensure the tensor has 3 channels (RGB)
+    if image_tensor.shape[0] != 3:
+        # If the image is grayscale, repeat the single channel to create 3 channels
+        image_tensor = image_tensor.repeat(3, 1, 1)
+
+    return image_tensor
+def preprocess_hdr2_image(image, config):
+    """
+    Preprocess an HDR image with optional multiscale decomposition.
+
+    Args:
+        image: Input image (2D numpy array).
+        config: Configuration dictionary.
+
+    Returns:
+        Preprocessed image (PyTorch tensor).
+    """
     # Debug: Input image
     #print(f"Input image shape: {image.shape}, dtype: {image.dtype}")
 
