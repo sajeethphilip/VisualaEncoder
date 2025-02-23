@@ -120,18 +120,33 @@ def train_model(config):
         eps=config["model"]["optimizer"]["epsilon"]
     )
 
-    # Loss functions setup (with default values if missing)
-    loss_functions = config["training"].get("loss_functions", {
-        "mse": {
-            "enabled": True,
-            "weight": 1.0
-        },
-        "ssim": {
-            "enabled": False,
-            "weight": 0.0
+    # Automatically adjust loss functions based on wavelet decomposition
+    if config["multiscale"]["enabled"]:
+        # Disable MSE and prioritize SSIM when wavelet decomposition is used
+        loss_functions = {
+            "mse": {
+                "enabled": False,  # Disable MSE
+                "weight": 0.0
+            },
+            "ssim": {
+                "enabled": True,   # Enable SSIM
+                "weight": 1.0     # Full weight to SSIM
+            }
         }
-    })
+    else:
+        # Use default loss functions from config
+        loss_functions = config["training"].get("loss_functions", {
+            "mse": {
+                "enabled": True,
+                "weight": 1.0
+            },
+            "ssim": {
+                "enabled": False,
+                "weight": 0.0
+            }
+        })
 
+    # Set up loss functions based on the adjusted configuration
     mse_enabled = loss_functions.get("mse", {}).get("enabled", False)
     ssim_enabled = loss_functions.get("ssim", {}).get("enabled", False)
 
@@ -173,7 +188,7 @@ def train_model(config):
                 images = images.to(device)  # Ensure images are on the correct device
 
             # Forward pass: Get reconstructed images
-            model=model.to(device)
+            model = model.to(device)
             reconstructed, latent = model(images)
 
             # Compute loss based on enabled loss functions
@@ -224,7 +239,6 @@ def train_model(config):
     print(f"\033[{progress_start + 20}H\033[K")
     print("Training complete!")
     return model
-
 def save_final_representations(model, loader, device, dataset_name):
     """Save the final latent space and embeddings."""
     latent_space = []
