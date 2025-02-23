@@ -121,7 +121,7 @@ def train_model(config):
     )
 
     # Define the MSE loss function
-    criterion_mse = nn.MSELoss().to(device)
+    criterion_mse = nn.MSELoss().to(device)  # Move loss function to the correct device
 
     # Automatically adjust loss functions based on wavelet decomposition
     if config["multiscale"]["enabled"]:
@@ -186,8 +186,8 @@ def train_model(config):
                 original, reconstructed = preprocess_hdr_image(img.cpu().numpy(), config)
                 original_images.append(original)
                 reconstructed_images.append(reconstructed)
-            original_images = torch.stack(original_images).to(device)
-            reconstructed_images = torch.stack(reconstructed_images).to(device)
+            original_images = torch.stack(original_images).to(device)  # Move to device
+            reconstructed_images = torch.stack(reconstructed_images).to(device)  # Move to device
 
             # Forward pass: Get predicted images
             predicted_images, latent = model(original_images)
@@ -232,6 +232,8 @@ def train_model(config):
     print(f"\033[{progress_start + 20}H\033[K")
     print("Training complete!")
     return model
+
+
 def save_final_representations(model, loader, device, dataset_name):
     """Save the final latent space and embeddings."""
     latent_space = []
