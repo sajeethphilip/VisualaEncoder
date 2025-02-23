@@ -120,6 +120,9 @@ def train_model(config):
         eps=config["model"]["optimizer"]["epsilon"]
     )
 
+    # Define the MSE loss function
+    criterion_mse = nn.MSELoss().to(device)
+
     # Automatically adjust loss functions based on wavelet decomposition
     if config["multiscale"]["enabled"]:
         # Disable MSE and prioritize SSIM when wavelet decomposition is used
@@ -152,7 +155,6 @@ def train_model(config):
 
     if mse_enabled:
         mse_weight = loss_functions["mse"].get("weight", 1.0)
-        criterion_mse = nn.MSELoss().to(device)  # Move loss function to the correct device
 
     if ssim_enabled:
         ssim_weight = loss_functions["ssim"].get("weight", 1.0)
@@ -173,8 +175,8 @@ def train_model(config):
         epoch_loss = 0.0
         num_batches = len(train_loader)
 
-        # In the training loop:
         for batch_idx, (images, labels) in enumerate(train_loader):
+            # Move images and labels to the correct device
             images = images.to(device)
             labels = labels.to(device)
 
@@ -203,7 +205,7 @@ def train_model(config):
             avg_loss = epoch_loss / (batch_idx + 1)
 
             # Update similarity metrics (per class)
-            class_metrics, num_groups = update_confusion_matrix(images, reconstructed, labels, confusion_matrix, screen_group=0)
+            class_metrics, num_groups = update_confusion_matrix(original_images, predicted_images, labels, confusion_matrix, screen_group=0)
 
             # Update progress display with box
             draw_progress_box(epoch, batch_idx + 1, num_batches, loss.item(), avg_loss, progress_start=14, epochs=epochs)
