@@ -170,7 +170,7 @@ def train_model(config):
     num_classes = len(train_dataset.classes)
     confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.float32).to(device)  # Move to device
 
-    # In the training loop:
+    # Training loop
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
@@ -191,7 +191,6 @@ def train_model(config):
             reconstructed_images = torch.stack(reconstructed_images).to(device)  # Reconstructed wavelet images
 
             # Forward pass: Pass reconstructed wavelet-decomposed images through the model
-            model=model.to(device)
             predicted_images, latent = model(reconstructed_images)
 
             # Compute loss: Compare predicted images with original images
@@ -206,6 +205,13 @@ def train_model(config):
             epoch_loss += loss.item()
             avg_loss = epoch_loss / (batch_idx + 1)
 
+            # Save mosaics and predicted images for visualization
+            if batch_idx % 10 == 0:  # Save every 10 batches
+                save_mosaic_path = os.path.join("training_mosaics", f"epoch_{epoch}_batch_{batch_idx}_mosaic.png")
+                create_mosaic(original_images, reconstructed_images, predicted_images, save_mosaic_path)
+
+                save_predicted_images(predicted_images, "predicted_images", epoch, batch_idx)
+
             # Update similarity metrics (per class)
             class_metrics, num_groups = update_confusion_matrix(original_images, predicted_images, labels, confusion_matrix, screen_group=0)
 
@@ -217,10 +223,6 @@ def train_model(config):
 
         # Save latent space representations for all images at the end of each epoch
         save_latent_space_for_epoch(model, train_loader, device, dataset_config["name"])
-
-        # Save mosaics for visualization
-        save_mosaic_path = os.path.join("training_mosaics", f"epoch_{epoch}_mosaic.png")
-        create_mosaic(original_images, reconstructed_images, predicted_images, save_mosaic_path)
 
         # Early stopping check
         if avg_epoch_loss < best_loss:

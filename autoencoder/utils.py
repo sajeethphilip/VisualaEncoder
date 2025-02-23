@@ -71,6 +71,29 @@ import torch
 import torchvision.utils as vutils
 import os
 
+def save_predicted_images(predicted_images, save_dir, epoch, batch_idx):
+    """
+    Save predicted images as PNG files.
+    Args:
+        predicted_images: Tensor of predicted images in the range [0, 1] or [-1, 1].
+        save_dir: Directory to save the images.
+        epoch: Current epoch number.
+        batch_idx: Current batch index.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Rescale predicted images to [0, 255]
+    if predicted_images.min().item() < 0:  # If in [-1, 1]
+        predicted_images = ((predicted_images + 1) * 127.5).byte()
+    else:  # If in [0, 1]
+        predicted_images = (predicted_images * 255).byte()
+
+    # Save each image in the batch
+    for i in range(predicted_images.size(0)):
+        image = predicted_images[i]  # Get the i-th image in the batch
+        save_path = os.path.join(save_dir, f"epoch_{epoch}_batch_{batch_idx}_image_{i}.png")
+        vutils.save_image(image.float() / 255.0, save_path, normalize=False)  # Save as [0, 1] for visualization
+
 def create_mosaic(original, reconstructed, predicted, save_path):
     """
     Create a mosaic of three images (original, reconstructed, predicted) and save it.
