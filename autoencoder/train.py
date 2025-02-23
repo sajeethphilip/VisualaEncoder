@@ -181,17 +181,22 @@ def train_model(config):
             images = images.to(device)
             labels = labels.to(device)
 
-            # Preprocess images with wavelet decomposition
-            original_images, reconstructed_images = [], []
-            for img in images:
-                original, reconstructed = preprocess_hdr_image(img.cpu().numpy(), config)
-                original_images.append(original)
-                reconstructed_images.append(reconstructed)
-            original_images = torch.stack(original_images).to(device)  # Original images
-            reconstructed_images = torch.stack(reconstructed_images).to(device)  # Reconstructed wavelet images
+            # Preprocess images with wavelet decomposition only if multiscale is enabled
+            if config["multiscale"]["enabled"]:
+                original_images, reconstructed_images = [], []
+                for img in images:
+                    original, reconstructed = preprocess_hdr_image(img.cpu().numpy(), config)
+                    original_images.append(original)
+                    reconstructed_images.append(reconstructed)
+                original_images = torch.stack(original_images).to(device)  # Original images
+                reconstructed_images = torch.stack(reconstructed_images).to(device)  # Reconstructed wavelet images
+            else:
+                # If multiscale is disabled, use the original images directly
+                original_images = images
+                reconstructed_images = images  # No wavelet decomposition, so reconstructed is the same as original
 
             # Forward pass: Pass reconstructed wavelet-decomposed images through the model
-            model=model.to(device)
+            model = model.to(device)
             predicted_images, latent = model(reconstructed_images)
 
             # Compute loss: Compare predicted images with original images
@@ -209,8 +214,16 @@ def train_model(config):
             # Save mosaics and predicted images for visualization
             if batch_idx % 10 == 0:  # Save every 10 batches
                 save_mosaic_path = os.path.join("training_mosaics", f"epoch_{epoch}_batch_{batch_idx}_mosaic.png")
-                create_mosaic(original_images, reconstructed_images, predicted_images, save_mosaic_path)
 
+                # Create mosaic based on whether multiscale is enabled
+                if config["multiscale"]["enabled"]:
+                    # If multiscale is enabled, create a mosaic of 3 images: original, reconstructed, and predicted
+                    create_mosaic(original_images, reconstructed_images, predicted_images, save_mosaic_path)
+                else:
+                    # If multiscale is disabled, create a mosaic of 2 images: input and predicted
+                    create_mosaic(original_images, None, predicted_images, save_mosaic_path)
+
+                # Save predicted images
                 save_predicted_images(predicted_images, "predicted_images", epoch, batch_idx)
 
             # Update similarity metrics (per class)

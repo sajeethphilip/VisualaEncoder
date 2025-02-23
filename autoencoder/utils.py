@@ -96,16 +96,11 @@ def save_predicted_images(predicted_images, save_dir, epoch, batch_idx):
 
 def create_mosaic(original, reconstructed, predicted, save_path):
     """
-    Create a mosaic of three images (original, reconstructed, predicted) and save it.
-    Args:
-        original: Tensor of original images in the range [0, 1] or [-1, 1].
-        reconstructed: Tensor of reconstructed wavelet-decomposed images in the range [0, 1] or [-1, 1].
-        predicted: Tensor of predicted images in the range [0, 1] or [-1, 1].
-        save_path: Path to save the mosaic image.
+    Create a mosaic of images (original, reconstructed, predicted) and save it.
+    If reconstructed is None, create a mosaic of only original and predicted.
     """
     # Ensure the images are on the CPU
     original = original.cpu()
-    reconstructed = reconstructed.cpu()
     predicted = predicted.cpu()
 
     # Rescale images to [0, 255] if necessary
@@ -114,22 +109,29 @@ def create_mosaic(original, reconstructed, predicted, save_path):
     else:  # If in [0, 1]
         original = (original * 255).byte()
 
-    if reconstructed.min().item() < 0:  # If in [-1, 1]
-        reconstructed = ((reconstructed + 1) * 127.5).byte()
-    else:  # If in [0, 1]
-        reconstructed = (reconstructed * 255).byte()
-
     if predicted.min().item() < 0:  # If in [-1, 1]
         predicted = ((predicted + 1) * 127.5).byte()
     else:  # If in [0, 1]
         predicted = (predicted * 255).byte()
 
-    # Concatenate the images horizontally
-    mosaic = torch.cat([original, reconstructed, predicted], dim=3)  # Concatenate along the width dimension
+    # Handle reconstructed images if available
+    if reconstructed is not None:
+        reconstructed = reconstructed.cpu()
+        if reconstructed.min().item() < 0:  # If in [-1, 1]
+            reconstructed = ((reconstructed + 1) * 127.5).byte()
+        else:  # If in [0, 1]
+            reconstructed = (reconstructed * 255).byte()
+
+        # Concatenate the images horizontally (original, reconstructed, predicted)
+        mosaic = torch.cat([original, reconstructed, predicted], dim=3)  # Concatenate along the width dimension
+    else:
+        # Concatenate only original and predicted images
+        mosaic = torch.cat([original, predicted], dim=3)  # Concatenate along the width dimension
 
     # Save the mosaic
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     vutils.save_image(mosaic.float() / 255.0, save_path, normalize=False)  # Save as [0, 1] for visualization
+
 
 
 def save_images(input_images, predicted_images, epoch, batch_idx, save_dir="training_images"):
