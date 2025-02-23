@@ -63,6 +63,8 @@ import pywt
 import numpy as np
 from skimage.transform import resize
 from torchvision import transforms
+import torch
+import torch.nn.functional as F
 
 def preprocess_hdr_image(image, config):
     """
@@ -238,42 +240,64 @@ def postprocess_hdr_image(image_tensor, config):
     return image
 
 
+def gaussian(window_size, sigma):
+    """Generates a 1D Gaussian kernel."""
+    gauss = torch.Tensor([torch.exp(-(x - window_size // 2) ** 2 / float(2 * sigma ** 2) for x in range(window_size)])
+    return gauss / gauss.sum()
 
-def ssim_loss(original, reconstructed, target_size=(64, 64)):
+def create_window(window_size, channel):
+    """Creates a 2D Gaussian window for SSIM computation."""
+    _1D_window = gaussian(window_size, 1.5).unsqueeze(1)
+    _2D_window = _1D_window.mm(_1D_window.t()).float().unsqueeze(0).unsqueeze(0)
+    window = _2D_window.expand(channel, 1, window_size, window_size).contiguous()
+    return window
+
+def ssim_loss(img1, img2, window_size=11, size_average=True):
     """
-    Compute the SSIM loss between original and reconstructed images.
-    Rescales images to a target size before computing SSIM to handle small images.
+    Computes the Structural Similarity Index (SSIM) loss between two images.
+    Args:
+        img1 (torch.Tensor): First image batch (B, C, H, W).
+        img2 (torch.Tensor): Second image batch (B, C, H, W).
+        window_size (int): Size of the Gaussian window.
+        size_average (bool): If True, average the SSIM over the batch.
+    Returns:
+        torch.Tensor: SSIM loss (1 - SSIM).
     """
-    # Detach tensors from the computation graph and convert to numpy arrays
-    original_np = original.detach().cpu().numpy()
-    reconstructed_np = reconstructed.detach().cpu().numpy()
+    # Ensure the images are on the same device
+    device = img1.device
 
-    # Compute SSIM for each image in the batch
-    ssim_values = []
-    for i in range(original_np.shape[0]):
-        # Rescale images to the target size
-        original_resized = resize(original_np[i], target_size, mode='reflect', anti_aliasing=True)
-        reconstructed_resized = resize(reconstructed_np[i], target_size, mode='reflect', anti_aliasing=True)
+    # Get the number of channels
+    channel = img1.size(1)
 
-        # Compute SSIM for the resized images
-        try:
-            ssim_value = ssim(
-                original_resized, reconstructed_resized,
-                win_size=7,  # Use default window size (now safe due to resizing)
-                channel_axis=0 if original_np.shape[1] == 1 else 1,  # Handle grayscale and RGB
-                data_range=1.0  # Assuming images are normalized to [0, 1]
-            )
-        except ValueError:
-            # Fallback to NaN if SSIM computation fails
-            ssim_value = float('nan')
+    # Create the Gaussian window
+    window = create_window(window_size, channel).to(device)
 
-        ssim_values.append(ssim_value)
+    # Compute SSIM components
+    mu1 = F.conv2d(img1, window, padding=window_size // 2, groups=channel)
+    mu2 = F.conv2d(img2, window, padding=window_size // 2, groups=channel)
 
-    # Convert SSIM values to a tensor
-    ssim_tensor = torch.tensor(ssim_values, device=original.device)
+    mu1_sq = mu1.pow(2)
+    mu2_sq = mu2.pow(2)
+    mu1_mu2 = mu1 * mu2
 
-    # SSIM loss: 1 - SSIM (since SSIM ranges from -1 to 1, with 1 being perfect similarity)
-    return 1 - ssim_tensor.mean()
+    sigma1_sq = F.conv2d(img1 * img1, window, padding=window_size // 2, groups=channel) - mu1_sq
+    sigma2_sq = F.conv2d(img2 * img2, window, padding=window_size // 2, groups=channel) - mu2_sq
+    sigma12 = F.conv2d(img1 * img2, window, padding=window_size // 2, groups=channel) - mu1_mu2
+
+    # SSIM constants
+    C1 = 0.01 ** 2
+    C2 = 0.03 ** 2
+
+    # Compute SSIM
+    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
+
+    if size_average:
+        ssim_value = ssim_map.mean()
+    else:
+        ssim_value = ssim_map.mean(1).mean(1).mean(1)
+
+    # SSIM loss: 1 - SSIM
+    return 1 - ssim_value
 
 def verify_latent_saving(dataset_name, class_folders):
     """Verify that latent space CSV files are properly saved."""
