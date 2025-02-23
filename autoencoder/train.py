@@ -190,6 +190,7 @@ def train_model(config):
             reconstructed_images = torch.stack(reconstructed_images).to(device)  # Move to device
 
             # Forward pass: Get predicted images
+            model=model.to(device)
             predicted_images, latent = model(original_images)
 
             # Compute loss: Compare predicted images with reconstructed wavelet-decomposed images
