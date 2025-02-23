@@ -4,6 +4,7 @@ import torch
 import os
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
+from skimage.transform import resize
 import pickle
 import requests
 import zipfile
@@ -236,9 +237,12 @@ def postprocess_hdr_image(image_tensor, config):
 
     return image
 
-def ssim_loss(original, reconstructed):
+
+
+def ssim_loss(original, reconstructed, target_size=(64, 64)):
     """
     Compute the SSIM loss between original and reconstructed images.
+    Rescales images to a target size before computing SSIM to handle small images.
     """
     # Detach tensors from the computation graph and convert to numpy arrays
     original_np = original.detach().cpu().numpy()
@@ -247,12 +251,22 @@ def ssim_loss(original, reconstructed):
     # Compute SSIM for each image in the batch
     ssim_values = []
     for i in range(original_np.shape[0]):
-        ssim_value = ssim(
-            original_np[i], reconstructed_np[i],
-            win_size=7,  # Adjust window size as needed
-            channel_axis=0 if original_np.shape[1] == 1 else 1,  # Handle grayscale and RGB
-            data_range=1.0  # Assuming images are normalized to [0, 1]
-        )
+        # Rescale images to the target size
+        original_resized = resize(original_np[i], target_size, mode='reflect', anti_aliasing=True)
+        reconstructed_resized = resize(reconstructed_np[i], target_size, mode='reflect', anti_aliasing=True)
+
+        # Compute SSIM for the resized images
+        try:
+            ssim_value = ssim(
+                original_resized, reconstructed_resized,
+                win_size=7,  # Use default window size (now safe due to resizing)
+                channel_axis=0 if original_np.shape[1] == 1 else 1,  # Handle grayscale and RGB
+                data_range=1.0  # Assuming images are normalized to [0, 1]
+            )
+        except ValueError:
+            # Fallback to NaN if SSIM computation fails
+            ssim_value = float('nan')
+
         ssim_values.append(ssim_value)
 
     # Convert SSIM values to a tensor
