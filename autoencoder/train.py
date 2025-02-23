@@ -219,19 +219,8 @@ def train_model(config):
                 mean = config["dataset"]["mean"]
                 std = config["dataset"]["std"]
 
-                # Denormalize the predicted image (output from the model)
-                predicted_images_denormalized = denormalize(predicted_images, mean, std)
-
-                # Create mosaic based on whether multiscale is enabled
-                if config["multiscale"]["enabled"]:
-                    # If multiscale is enabled, create a mosaic of 3 images: original, reconstructed, and predicted
-                    create_mosaic(original_images, reconstructed_images, predicted_images_denormalized, save_mosaic_path, mean, std)
-                else:
-                    # If multiscale is disabled, create a mosaic of 2 images: input and predicted
-                    create_mosaic(original_images, None, predicted_images_denormalized, save_mosaic_path, mean, std)
-
                 # Save predicted images
-                save_predicted_images(predicted_images, "predicted_images", epoch, batch_idx)
+                save_predicted_images(predicted_images, "predicted_images", epoch, batch_idx, mean, std)
 
             # Update similarity metrics (per class)
             class_metrics, num_groups = update_confusion_matrix(original_images, predicted_images, labels, confusion_matrix, screen_group=0)
