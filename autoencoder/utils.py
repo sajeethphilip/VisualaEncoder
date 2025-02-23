@@ -65,6 +65,52 @@ from skimage.transform import resize
 from torchvision import transforms
 import torch
 import torch.nn.functional as F
+import os
+from torchvision.utils import save_image
+import torch
+import torchvision.utils as vutils
+import os
+
+def create_mosaic(original, reconstructed, predicted, save_path):
+    """
+    Create a mosaic of three images (original, reconstructed, predicted) and save it.
+    Args:
+        original: Tensor of original images.
+        reconstructed: Tensor of reconstructed wavelet-decomposed images.
+        predicted: Tensor of predicted images.
+        save_path: Path to save the mosaic image.
+    """
+    # Ensure the images are on the CPU and in the range [0, 1]
+    original = original.cpu()
+    reconstructed = reconstructed.cpu()
+    predicted = predicted.cpu()
+
+    # Concatenate the images horizontally
+    mosaic = torch.cat([original, reconstructed, predicted], dim=3)  # Concatenate along the width dimension
+
+    # Save the mosaic
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    vutils.save_image(mosaic, save_path, normalize=True)
+
+def save_images(input_images, predicted_images, epoch, batch_idx, save_dir="training_images"):
+    """
+    Save input and predicted images for visualization.
+    Args:
+        input_images: Tensor of input images (normalized reconstructed wavelet-decomposed images).
+        predicted_images: Tensor of predicted images.
+        epoch: Current epoch number.
+        batch_idx: Current batch index.
+        save_dir: Directory to save the images.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Save input images
+    input_save_path = os.path.join(save_dir, f"epoch_{epoch}_batch_{batch_idx}_input.png")
+    save_image(input_images, input_save_path, normalize=True)
+
+    # Save predicted images
+    predicted_save_path = os.path.join(save_dir, f"epoch_{epoch}_batch_{batch_idx}_predicted.png")
+    save_image(predicted_images, predicted_save_path, normalize=True)
 
 def preprocess_hdr_image(image, config):
     """

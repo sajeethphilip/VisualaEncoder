@@ -6,8 +6,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 from autoencoder.model import Autoencoder, ModifiedAutoencoder
-from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv, save_checkpoint, update_progress, display_confusion_matrix,ssim_loss,save_latent_space_for_epoch,postprocess_hdr_image
-from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv, save_batch_latents, display_header,update_confusion_matrix,preprocess_hdr_image
+from autoencoder.utils import get_device, save_latent_space, save_embeddings_as_csv, save_checkpoint, update_progress, display_confusion_matrix
+from autoencoder.utils import load_checkpoint, load_local_dataset, load_dataset_config, save_1d_latent_to_csv, save_batch_latents, display_header,create_mosaic
+from autoencoder.utils import save_images,ssim_loss,save_latent_space_for_epoch,postprocess_hdr_image,update_confusion_matrix,preprocess_hdr_image
 from datetime import datetime
 from tqdm import tqdm
 from colorama import init, Fore, Back, Style
@@ -169,13 +170,12 @@ def train_model(config):
     num_classes = len(train_dataset.classes)
     confusion_matrix = torch.zeros((num_classes, num_classes), dtype=torch.float32).to(device)  # Move to device
 
-    # Training loop
+    # In the training loop:
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
         num_batches = len(train_loader)
 
-        # In the training loop:
         for batch_idx, (images, labels) in enumerate(train_loader):
             # Move images and labels to the correct device
             images = images.to(device)
@@ -191,7 +191,6 @@ def train_model(config):
             reconstructed_images = torch.stack(reconstructed_images).to(device)  # Reconstructed wavelet images
 
             # Forward pass: Pass reconstructed wavelet-decomposed images through the model
-            model=model.to(device)
             predicted_images, latent = model(reconstructed_images)
 
             # Compute loss: Compare predicted images with original images
@@ -217,6 +216,10 @@ def train_model(config):
 
         # Save latent space representations for all images at the end of each epoch
         save_latent_space_for_epoch(model, train_loader, device, dataset_config["name"])
+
+        # Save mosaics for visualization
+        save_mosaic_path = os.path.join("training_mosaics", f"epoch_{epoch}_mosaic.png")
+        create_mosaic(original_images, reconstructed_images, predicted_images, save_mosaic_path)
 
         # Early stopping check
         if avg_epoch_loss < best_loss:
