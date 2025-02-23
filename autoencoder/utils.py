@@ -942,10 +942,6 @@ def save_batch_latents(batch_latents, image_paths, dataset_name, metadata=None):
         df = pd.DataFrame(data)
         df.to_csv(csv_path, index=False)
 
-
-
-
-
 def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
     """
     Reconstruct images from latent CSV files maintaining the original folder hierarchy.
@@ -970,6 +966,10 @@ def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
     # Create base reconstruction directory
     base_recon_dir = f"data/{dataset_name}/reconstructed_images"
     os.makedirs(base_recon_dir, exist_ok=True)
+
+    # Get mean and std from config for denormalization
+    mean = config["dataset"]["mean"]
+    std = config["dataset"]["std"]
 
     def process_directory(current_dir):
         """Process a directory and its subdirectories recursively."""
@@ -1012,17 +1012,15 @@ def reconstruct_from_latent(latent_dir, checkpoint_path, dataset_name, config):
                         if hasattr(model, 'adaptive_upsample'):
                             reconstructed = model.adaptive_upsample(reconstructed)
 
+                        # Denormalize the reconstructed image
+                        reconstructed = denormalize(reconstructed, mean, std)
+
                     # Save reconstructed image
                     output_name = os.path.splitext(file)[0] + '.png'
                     output_path = os.path.join(recon_dir, output_name)
 
                     # Rescale predicted image to [0, 255] and save as PNG
-                    if reconstructed.min().item() < 0:  # If in [-1, 1]
-                        reconstructed = ((reconstructed + 1) * 127.5).byte()
-                    else:  # If in [0, 1]
-                        reconstructed = (reconstructed * 255).byte()
-
-                    # Save the image
+                    reconstructed = (reconstructed * 255).byte()
                     vutils.save_image(reconstructed.float() / 255.0, output_path, normalize=False)
 
                 except Exception as e:
@@ -1736,6 +1734,7 @@ def preprocess_image(image, device, config):
     transform_list = [
         transforms.Resize(input_size),
         transforms.ToTensor(),
+        transforms.Normalize(mean=config["dataset"]["mean"], std=config["dataset"]["std"])
     ]
 
     # Add grayscale conversion if needed
@@ -1757,7 +1756,6 @@ def preprocess_image(image, device, config):
     # Apply transformations
     image_tensor = transform(image).unsqueeze(0).to(device)
     return image_tensor
-
 def enhance_features(latent, embedding, model, enhancement_factor=2.0):
     """
     Enhance decisive features in the latent space based on the embedding.
