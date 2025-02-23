@@ -175,6 +175,7 @@ def train_model(config):
         epoch_loss = 0.0
         num_batches = len(train_loader)
 
+        # In the training loop:
         for batch_idx, (images, labels) in enumerate(train_loader):
             # Move images and labels to the correct device
             images = images.to(device)
@@ -186,15 +187,14 @@ def train_model(config):
                 original, reconstructed = preprocess_hdr_image(img.cpu().numpy(), config)
                 original_images.append(original)
                 reconstructed_images.append(reconstructed)
-            original_images = torch.stack(original_images).to(device)  # Move to device
-            reconstructed_images = torch.stack(reconstructed_images).to(device)  # Move to device
+            original_images = torch.stack(original_images).to(device)  # Original images
+            reconstructed_images = torch.stack(reconstructed_images).to(device)  # Reconstructed wavelet images
 
-            # Forward pass: Get predicted images
-            model=model.to(device)
-            predicted_images, latent = model(original_images)
+            # Forward pass: Pass reconstructed wavelet-decomposed images through the model
+            predicted_images, latent = model(reconstructed_images)
 
-            # Compute loss: Compare predicted images with reconstructed wavelet-decomposed images
-            loss = criterion_mse(predicted_images, reconstructed_images)
+            # Compute loss: Compare predicted images with original images
+            loss = criterion_mse(predicted_images, original_images)
 
             # Backward pass and optimization
             optimizer.zero_grad()

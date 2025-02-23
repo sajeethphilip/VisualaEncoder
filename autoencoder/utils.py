@@ -132,6 +132,7 @@ def preprocess_hdr_image(image, config):
             original_tensor = original_tensor.repeat(3, 1, 1)
 
         return original_tensor, original_tensor
+
 def preprocess_hdr2_image(image, config):
     """
     Preprocess an HDR image with optional multiscale decomposition.
