@@ -69,13 +69,9 @@ import torch.nn.functional as F
 def preprocess_hdr_image(image, config):
     """
     Preprocess an HDR image with optional multiscale decomposition.
-
-    Args:
-        image: Input image (2D numpy array).
-        config: Configuration dictionary.
-
     Returns:
-        Preprocessed image (PyTorch tensor).
+        original_tensor: Original image as a PyTorch tensor.
+        reconstructed_tensor: Reconstructed wavelet-decomposed image as a PyTorch tensor.
     """
     original_shape = image.shape
 
@@ -110,20 +106,32 @@ def preprocess_hdr_image(image, config):
         if config["multiscale"]["resize_to_input"]:
             reconstructed = resize(reconstructed, original_shape, mode="reflect", anti_aliasing=True)
 
-        image = reconstructed
+        # Convert to PyTorch tensors
+        if isinstance(image, np.ndarray):
+            original_tensor = torch.from_numpy(image).float()
+            reconstructed_tensor = torch.from_numpy(reconstructed).float()
+        else:
+            original_tensor = transforms.ToTensor()(image)
+            reconstructed_tensor = transforms.ToTensor()(reconstructed)
 
-    # Convert to PyTorch tensor
-    if isinstance(image, np.ndarray):
-        image_tensor = torch.from_numpy(image).float()  # Convert to float tensor
+        # Ensure the tensors have 3 channels (RGB)
+        if original_tensor.shape[0] != 3:
+            original_tensor = original_tensor.repeat(3, 1, 1)
+        if reconstructed_tensor.shape[0] != 3:
+            reconstructed_tensor = reconstructed_tensor.repeat(3, 1, 1)
+
+        return original_tensor, reconstructed_tensor
     else:
-        image_tensor = transforms.ToTensor()(image)  # Fallback to ToTensor for PIL images
+        # If multiscale is disabled, return the original image as both original and reconstructed
+        if isinstance(image, np.ndarray):
+            original_tensor = torch.from_numpy(image).float()
+        else:
+            original_tensor = transforms.ToTensor()(image)
 
-    # Ensure the tensor has 3 channels (RGB)
-    if image_tensor.shape[0] != 3:
-        # If the image is grayscale, repeat the single channel to create 3 channels
-        image_tensor = image_tensor.repeat(3, 1, 1)
+        if original_tensor.shape[0] != 3:
+            original_tensor = original_tensor.repeat(3, 1, 1)
 
-    return image_tensor
+        return original_tensor, original_tensor
 def preprocess_hdr2_image(image, config):
     """
     Preprocess an HDR image with optional multiscale decomposition.

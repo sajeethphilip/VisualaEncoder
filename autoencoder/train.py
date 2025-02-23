@@ -173,34 +173,25 @@ def train_model(config):
         epoch_loss = 0.0
         num_batches = len(train_loader)
 
+        # In the training loop:
         for batch_idx, (images, labels) in enumerate(train_loader):
-            # Move images and labels to the correct device
             images = images.to(device)
             labels = labels.to(device)
 
-            # Conditional preprocessing based on JSON configuration
-            if config["multiscale"]["enabled"]:
-                # Apply multiscale decomposition
-                images = torch.stack([preprocess_hdr_image(img.cpu().numpy(), config) for img in images])
-                images = images.to(device)  # Move preprocessed images back to the device
-            else:
-                # Apply standard preprocessing (e.g., normalization, resizing)
-                images = images.to(device)  # Ensure images are on the correct device
+            # Preprocess images with wavelet decomposition
+            original_images, reconstructed_images = [], []
+            for img in images:
+                original, reconstructed = preprocess_hdr_image(img.cpu().numpy(), config)
+                original_images.append(original)
+                reconstructed_images.append(reconstructed)
+            original_images = torch.stack(original_images).to(device)
+            reconstructed_images = torch.stack(reconstructed_images).to(device)
 
-            # Forward pass: Get reconstructed images
-            model = model.to(device)
-            reconstructed, latent = model(images)
+            # Forward pass: Get predicted images
+            predicted_images, latent = model(original_images)
 
-            # Compute loss based on enabled loss functions
-            loss = 0.0
-
-            if mse_enabled:
-                mse_loss = criterion_mse(reconstructed, images)
-                loss += mse_weight * mse_loss
-
-            if ssim_enabled:
-                ssim_loss_value = ssim_loss(images, reconstructed)
-                loss += ssim_weight * ssim_loss_value
+            # Compute loss: Compare predicted images with reconstructed wavelet-decomposed images
+            loss = criterion_mse(predicted_images, reconstructed_images)
 
             # Backward pass and optimization
             optimizer.zero_grad()
