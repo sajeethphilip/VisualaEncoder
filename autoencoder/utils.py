@@ -242,7 +242,7 @@ def postprocess_hdr_image(image_tensor, config):
 
 def gaussian(window_size, sigma):
     """Generates a 1D Gaussian kernel."""
-    gauss = torch.Tensor([torch.exp(-(x - window_size // 2) ** 2 / float(2 * sigma ** 2)) for x in range(window_size)])
+    gauss = torch.Tensor([torch.exp(-(x - window_size // 2) ** 2 / float(2 * sigma ** 2) for x in range(window_size)])
     return gauss / gauss.sum()
 
 def create_window(window_size, channel):
